@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>.required-star { color: #dc2626; margin-left: 2px; font-size: 0.85rem; vertical-align: middle; }</style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-view" class="view active">
+            <div class="login-wrapper">
+                <div class="login-box" style="text-align: center;">
+                    <img src="neuaitechnologies_logo.jpg" alt="NeuAI Logo" style="height: 130px; object-fit: contain; margin-bottom: 1.5rem;">
+                    <h1 style="font-size: 1.6rem; color: #5a3d31; font-weight: 600;">Seller Admin Panel</h1>
+                    <p>Developer dashboard — manage all clients and their chatbot configurations.</p>
+                    <form id="login-form">
+                        <div class="input-group">
+                            <label for="seller-password">Enter Developer Password</label>
+                            <input type="password" id="seller-password" required placeholder="Password">
+                        </div>
+                        <button type="submit" class="btn primary-btn block-btn">Login</button>
+                        <div id="login-error" class="error-text" style="margin-top:1rem; font-size:1rem; font-weight:600; text-align:center; min-height:1.5rem;"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="dashboard-view" class="view">
+            <div class="layout">
+
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <div class="sidebar-header" style="text-align: center; padding-top: 2rem; padding-bottom: 1.5rem;">
+                        <img src="neuaitechnologies_logo.jpg" alt="NeuAI Logo" style="height: 80px; object-fit: contain; margin-bottom: 0.8rem;">
+                        <div style="font-weight: 600; font-size: 1rem; color: #5a3d31;">Developer Admin</div>
+                        <span class="tenant-badge" style="margin-top: 0.5rem; background: #fff5eb; color: var(--primary); border: 1px solid #fde0c4;">Superadmin</span>
+                    </div>
+
+                    <div style="padding: 1rem 1rem 0.5rem 1rem;">
+                        <div id="current-client-banner" style="display:none; background:#fff5eb; border:1px solid #fde0c4; border-radius:8px; padding:0.7rem 1rem;">
+                            <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:2px;">VIEWING CLIENT</div>
+                            <div id="current-tenant-info" style="font-weight:700; color:#5a3d31; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                        </div>
+                    </div>
+
+                    <nav class="sidebar-nav">
+                        <div class="nav-group-title">Global Settings</div>
+                        <button class="nav-btn active" data-target="tab-register">Register Client</button>
+                        <button class="nav-btn" data-target="tab-clients">Registered Clients</button>
+                        <button class="nav-btn" data-target="tab-billing"> Billing & Payments</button>
+                        <button class="nav-btn" data-target="tab-plans"> Manage Plans</button>
+                        <button class="nav-btn" data-target="tab-incidents"> Incidents</button>
+                        <!-- Tenant Specific Tabs -->
+                        <div id="client-configs-menu" style="display: none;">
+                            <div class="nav-group-title">Client Configs</div>
+                            <button class="nav-btn" data-target="tab-identity">Business Identity</button>
+                            <button class="nav-btn" data-target="tab-chatbot">Chatbot Settings</button>
+                            <button class="nav-btn" data-target="tab-analytics"> 30-Day Summary</button>
+                        </div>
+                    </nav>
+
+                    <div class="sidebar-footer">
+                        <button id="logout-btn" class="nav-btn text-danger">Logout</button>
+                    </div>
+                </aside>
+
+                <main class="main-content">
+
+                    <!-- Tab: Register Client -->
+                    <section id="tab-register" class="content-section active">
+                        <header class="section-header">
+                            <h2> Register Client</h2>
+                            <p style="color:var(--text-muted);">Register new clients. Each client name must be unique.</p>
+                        </header>
+
+                        <div class="card bg-light" style="margin-bottom: 2rem;">
+                            <h3>Register New Client</h3>
+                            <form id="create-tenant-form">
+                                <div class="input-group">
+                                    <label for="tenant-name">Client Name (e.g., 'Hotel Sunrise')</label>
+                                    <input type="text" id="tenant-name" required>
+                                    <small style="color:#888;">Must be unique. This becomes the client's display name.</small>
+                                </div>
+                                <div class="input-group">
+                                    <label for="admin-password">Client Admin Password</label>
+                                    <input type="password" id="admin-password" required value="admin">
+                                    <small style="color:#888;">Password for the client to access their admin panel.</small>
+                                </div>
+                                <div class="input-group" style="margin-top: 1rem;">
+                                    <label>Client Logo Upload (Optional)</label>
+                                    <div style="display: flex; align-items: center; gap: 1rem;">
+                                        <div id="reg-logo-preview-container" style="width: 50px; height: 50px; border-radius: 50%; background: #eee; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
+                                            <img id="reg-logo-preview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                            <span id="reg-logo-placeholder" style="font-size: 0.8rem; color: #888;">None</span>
+                                        </div>
+                                        <input type="file" id="reg-profile-logo" accept="image/png, image/jpeg, image/jpg, image/svg+xml" style="flex: 1;">
+                                        <button type="button" id="reg-clear-logo-btn" class="btn text-danger" style="display: none; padding: 0.3rem 0.6rem;">Remove</button>
+                                    </div>
+                                    <input type="hidden" id="reg-profile-logo-b64">
+                                    <small style="color:#888;">Upload a small image. It will be resized automatically (max 200px).</small>
+                                </div>
+                                <button type="submit" class="btn primary-btn"> Register Client</button>
+                                <div id="create-error" class="error-text"></div>
+                            </form>
+                        </div>
+
+                        <div class="card bg-light" style="margin-bottom: 2rem;">
+                            <h3>Create Demo Tenant</h3>
+                            <form id="create-demo-tenant-form">
+                                <div class="input-group">
+                                    <label for="demo-tenant-name">Demo Client Name (e.g., 'Demo Hotel')</label>
+                                    <input type="text" id="demo-tenant-name" required>
+                                    <small style="color:#888;">Must be unique. Prefilled with starter plan and sample content.</small>
+                                </div>
+                                <button type="submit" class="btn outline-btn" style="color:#107c41; border-color:#107c41;"> Create Demo Account</button>
+                                <div id="demo-create-error" class="error-text"></div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <!-- Tab: Registered Clients -->
+                    <section id="tab-clients" class="content-section">
+                        <header class="section-header flex-header">
+                            <div>
+                                <h2> Registered Clients</h2>
+                                <p style="color:var(--text-muted); margin-bottom: 0;">View and manage all your onboarded clients.</p>
+                            </div>
+                            <div style="width: 250px;">
+                                <input type="text" id="clients-search" placeholder="Search clients..." style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;">
+                            </div>
+                        </header>
+
+                        <div class="card no-pad">
+                            <div style="padding:1.5rem; border-bottom:1px solid var(--border-color);">
+                                <h3>Active Business Accounts</h3>
+                            </div>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th style="cursor: pointer;" onclick="toggleSort('is_active')">Status ↕</th>
+                                            <th style="cursor: pointer;" onclick="toggleSort('name')">Name ↕</th>
+                                            <th>API Key</th>
+                                            <th>Subscription</th>
+                                            <th style="cursor: pointer;" onclick="toggleSort('created_at')">Created At ↕</th>
+                                            <th>Chatbot</th>
+                                            <th>Admin</th>
+                                            <th>Action</th>
+                                            <th>Manage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tenants-list"></tbody>
+                                </table>
+                            </div>
+                            <div id="no-tenants" class="empty-state">No clients found.</div>
+                            <div id="clients-pagination" style="padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color);">
+                                <div style="font-size: 0.85rem; color: var(--text-muted);" id="clients-page-info">Showing 0 to 0 of 0 entries</div>
+                                <div style="display: flex; gap: 0.5rem;" id="clients-page-controls">
+                                    <button class="btn outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" id="clients-prev-btn">Previous</button>
+                                    <span style="font-size: 0.85rem; padding: 0.3rem;" id="clients-page-num">1</span>
+                                    <button class="btn outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" id="clients-next-btn">Next</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Tab: Billing & Payments -->
+                    <section id="tab-billing" class="content-section">
+                        <header class="section-header">
+                            <h2> Billing & Payments</h2>
+                            <p style="color:var(--text-muted);">Manage subscriptions and process manual client payments.</p>
+                        </header>
+
+                        <!-- Charge Form -->
+                        <div class="card bg-light" style="margin-bottom: 2rem;">
+                            <h3>Charge a Client</h3>
+                            <form id="charge-client-form">
+                                <div class="input-group">
+                                    <label for="charge-tenant-id">Select Client</label>
+                                    <select id="charge-tenant-id" required>
+                                        <option value="" disabled selected>-- Select a Client --</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 1rem;">
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="charge-plan">Plan Name</label>
+                                        <select id="charge-plan" required>
+                                            <option value="" disabled selected>-- Loading Plans --</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="charge-amount">Amount (₹ INR)</label>
+                                        <input type="number" id="charge-amount" required min="0" step="0.01" placeholder="e.g. 2400.00">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn primary-btn"> Record Payment & Extend 30 Days</button>
+                                <div id="charge-error" class="error-text"></div>
+                            </form>
+                        </div>
+
+                        <!-- Invoice History -->
+                        <div class="card no-pad">
+                            <div style="padding:1.5rem; border-bottom:1px solid var(--border-color);">
+                                <h3>Global Payment History</h3>
+                            </div>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Invoice ID</th>
+                                            <th>Client Details</th>
+                                            <th>Plan</th>
+                                            <th>Amount (INR)</th>
+                                            <th>Status</th>
+                                            <th>Payment Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoices-list">
+                                        <!-- Invoices populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Tab: Manage Plans -->
+                    <section id="tab-plans" class="content-section">
+                        <header class="section-header">
+                            <h2> Manage Subscription Plans</h2>
+                            <p style="color:var(--text-muted);">Create and modify global subscription tiers.</p>
+                        </header>
+
+                        <!-- Create/Edit Plan Form -->
+                        <div class="card bg-light" style="margin-bottom: 2rem;">
+                            <h3 id="plan-form-title">Create New Plan</h3>
+                            <form id="plan-form">
+                                <input type="hidden" id="plan-id">
+                                <div class="input-group">
+                                    <label for="plan-name">Plan Name</label>
+                                    <input type="text" id="plan-name" required placeholder="e.g. Starter Plan">
+                                </div>
+                                <div style="display: flex; gap: 1rem;">
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="plan-price">Price (₹ INR / month)</label>
+                                        <input type="number" id="plan-price" required min="0" step="0.01" value="0.00">
+                                    </div>
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="plan-messages">Messages per Month</label>
+                                        <input type="number" id="plan-messages" required min="1" value="1000">
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 1rem;">
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="plan-docs">Knowledge Documents Limit</label>
+                                        <input type="number" id="plan-docs" required min="0" value="5">
+                                    </div>
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="plan-faqs">FAQs Limit</label>
+                                        <input type="number" id="plan-faqs" required min="0" value="20">
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 1rem; align-items: center;">
+                                    <div class="input-group" style="flex: 1; flex-direction: row; gap: 10px;">
+                                        <input type="checkbox" id="plan-export" style="width: auto;">
+                                        <label for="plan-export" style="margin: 0;">Enable Data Export</label>
+                                    </div>
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="plan-languages">Supported Languages</label>
+                                        <input type="text" id="plan-languages" required value="en" placeholder="e.g. en,fr,de or all">
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                                    <button type="submit" class="btn primary-btn" id="plan-submit-btn"> Save Plan</button>
+                                    <button type="button" class="btn outline-btn" id="plan-cancel-btn" style="display: none;">Cancel Edit</button>
+                                </div>
+                                <div id="plan-error" class="error-text"></div>
+                            </form>
+                        </div>
+
+                        <!-- Plans List -->
+                        <div class="card no-pad">
+                            <div style="padding:1.5rem; border-bottom:1px solid var(--border-color);">
+                                <h3>Available Plans</h3>
+                            </div>
+                            <div class="table-responsive">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Price (INR)</th>
+                                            <th>Messages/mo</th>
+                                            <th>Docs Limit</th>
+                                            <th>FAQs Limit</th>
+                                            <th>Export</th>
+                                            <th>Languages</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="plans-list">
+                                        <!-- Plans populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Tab: Business Identity -->
+                    <section id="tab-identity" class="content-section">
+                        <header class="section-header">
+                            <h2>Customize Chatbot Identity</h2>
+                        </header>
+                        <div id="identity-require-tenant" class="empty-state">Click <strong>Manage →</strong> on a client row in Registered Clients to view data.</div>
+                        <div id="identity-content" style="display:none;">
+                            <div class="card">
+                                <form id="profile-form">
+                                    <div class="input-group">
+                                        <label for="profile-name">Company Name <span class="required-star">&#9733;</span></label>
+                                        <input type="text" id="profile-name" required>
+                                    </div>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-ind">Industry <span class="required-star">&#9733;</span></label>
+                                            <input type="text" id="profile-ind" required style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-hours">Business Hours</label>
+                                            <input type="text" id="profile-hours" placeholder="e.g., Mon-Fri 9AM-5PM" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    <div class="input-group">
+                                        <label for="profile-desc">Business Description <span class="required-star">&#9733;</span></label>
+                                        <textarea id="profile-desc" rows="3" required></textarea>
+                                    </div>
+
+                                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Point of Contact</h3>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-contact-name">Contact Person Name</label>
+                                            <input type="text" id="profile-contact-name" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-contact-role">Contact Person Role</label>
+                                            <input type="text" id="profile-contact-role" placeholder="e.g. CEO, Operations Manager" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-contact-email">Contact Email (Direct) <span class="required-star">&#9733;</span></label>
+                                            <input type="email" id="profile-contact-email" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-contact-phone">Contact Phone (Direct/WhatsApp) <span class="required-star">&#9733;</span></label>
+                                            <input type="tel" id="profile-contact-phone" style="width: 100%;">
+                                        </div>
+                                    </div>
+
+                                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Location & Operations</h3>
+                                    <div class="input-group">
+                                        <label for="profile-address-street">Street Address</label>
+                                        <input type="text" id="profile-address-street" style="width: 100%;">
+                                    </div>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-city">City</label>
+                                            <input type="text" id="profile-city" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-state">State</label>
+                                            <input type="text" id="profile-state" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-country">Country</label>
+                                            <input type="text" id="profile-country" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-zip">ZIP / Postal Code</label>
+                                            <input type="text" id="profile-zip" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-timezone">Timezone</label>
+                                            <input type="text" id="profile-timezone" placeholder="e.g. Asia/Kolkata" style="width: 100%;">
+                                        </div>
+                                    </div>
+
+                                    <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Branding & UI Customization</h3>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-brand-primary">Primary Color (Hex)</label>
+                                            <input type="text" id="profile-brand-primary" placeholder="#FF5733" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-brand-secondary">Secondary Color (Hex)</label>
+                                            <input type="text" id="profile-brand-secondary" placeholder="#FFFFFF" style="width: 100%;">
+                                        </div>
+                                    </div>
+                                    <div class="input-group" style="display: flex; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <label for="profile-social-li">LinkedIn URL</label>
+                                            <input type="url" id="profile-social-li" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-social-tw">Twitter URL</label>
+                                            <input type="url" id="profile-social-tw" style="width: 100%;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label for="profile-social-ig">Instagram URL</label>
+                                            <input type="url" id="profile-social-ig" style="width: 100%;">
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="btn primary-btn" style="margin-top: 1.5rem;">Update Identity</button>
+                                    <span id="profile-msg" class="msg-text"></span>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Tab: Chatbot Settings -->
+                    <section id="tab-chatbot" class="content-section">
+                        <header class="section-header">
+                            <h2>Chatbot Settings</h2>
+                        </header>
+                        <div id="chatbot-require-tenant" class="empty-state">Click <strong>Manage &rarr;</strong> on a client row in Registered Clients to configure chatbot settings.</div>
+                        <div id="chatbot-content" style="display:none;">
+                            <div class="card">
+                                <form id="chatbot-settings-form">
+                                    <div class="input-group">
+                                        <label for="profile-chatbot-greeting">Chatbot Greeting Message <span class="required-star">&#9733;</span></label>
+                                        <input type="text" id="profile-chatbot-greeting" placeholder="Hi! How can I help you today?" style="width: 100%;">
+                                        <small style="color:#888;">This is the first message users see when they open the chat.</small>
+                                    </div>
+                                    <div class="input-group" style="margin-top:1rem;">
+                                        <label for="profile-chatbot-prompt">Chatbot System Prompt (Behavior Instructions) <span class="required-star">&#9733;</span></label>
+                                        <textarea id="profile-chatbot-prompt" rows="7" placeholder="You are a helpful customer support assistant for [Company Name]. Always be polite and professional..." style="width: 100%;"></textarea>
+                                        <small style="color:#888;">Instructions that control how the AI responds. Be specific about tone, topics it should/shouldn't cover, and escalation rules.</small>
+                                    </div>
+                                    <div class="input-group" style="margin-top:1rem;">
+                                        <label>Bot Avatar / Logo Upload (Optional)</label>
+                                        <div style="display: flex; align-items: center; gap: 1rem;">
+                                            <div id="logo-preview-container" style="width: 50px; height: 50px; border-radius: 50%; background: #eee; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc;">
+                                                <img id="logo-preview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                                <span id="logo-placeholder" style="font-size: 0.8rem; color: #888;">None</span>
+                                            </div>
+                                            <input type="file" id="profile-logo" accept="image/png, image/jpeg, image/jpg, image/svg+xml" style="flex: 1;">
+                                            <button type="button" id="clear-logo-btn" class="btn text-danger" style="display: none; padding: 0.3rem 0.6rem;">Remove</button>
+                                        </div>
+                                        <input type="hidden" id="profile-logo-b64">
+                                        <small style="color:#888;">Upload a small image. It will be resized automatically (max 200px).</small>
+                                    </div>
+                                    <button type="submit" class="btn primary-btn" style="margin-top: 1.5rem;">&#128190; Save Chatbot Settings</button>
+                                    <span id="chatbot-settings-msg" class="msg-text"></span>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Tab: Analytics -->
+                    <section id="tab-analytics" class="content-section">
+                        <header class="section-header" style="flex-wrap: wrap; gap: 1rem;">
+                            <h2>30-Day Summary</h2>
+                            <div class="analytics-date-filter" id="analytics-date-filter" style="display: none;">
+                                <button class="date-filter-btn" data-days="7">7 Days</button>
+                                <button class="date-filter-btn active" data-days="30">30 Days</button>
+                                <button class="date-filter-btn" data-days="90">90 Days</button>
+                                <button class="date-filter-btn" data-days="0">All Time</button>
+                            </div>
+                        </header>
+                        <div id="analytics-require-tenant" class="empty-state">Click <strong>Manage →</strong> on a client row in Registered Clients to view analytics.</div>
+                        <div id="analytics-content" style="display:none;">
+
+                            <!-- KPI Row 1 -->
+                            <div class="metrics-grid metrics-grid-5">
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">💬</div>
+                                    <div class="kpi-body"><h3>Total Queries</h3><div class="metric-value" id="metric-total-queries">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4);">👥</div>
+                                    <div class="kpi-body"><h3>Unique Users</h3><div class="metric-value" id="metric-unique-users">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#f59e0b,#f97316);">🎯</div>
+                                    <div class="kpi-body"><h3>Intents Detected</h3><div class="metric-value" id="metric-intents">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#10b981,#059669);">✅</div>
+                                    <div class="kpi-body"><h3>AI Resolved</h3><div class="metric-value" id="metric-ai-resolved" style="color:#107c41;">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626);">🤝</div>
+                                    <div class="kpi-body"><h3>Human Handover</h3><div class="metric-value" id="metric-human-handover" style="color:#dc2626;">-</div></div>
+                                </div>
+                            </div>
+
+                            <!-- KPI Row 2 -->
+                            <div class="metrics-grid metrics-grid-5" style="margin-top:1rem;">
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#8b5cf6,#ec4899);">📈</div>
+                                    <div class="kpi-body"><h3>Resolution Rate</h3><div class="metric-value" id="metric-resolution" style="color:#107c41;">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#0078d4,#0ea5e9);">🏆</div>
+                                    <div class="kpi-body"><h3>Sales Leads</h3><div class="metric-value" id="metric-leads-count" style="color:#0078d4;">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#f59e0b,#10b981);">💰</div>
+                                    <div class="kpi-body"><h3>Conversion Rate</h3><div class="metric-value" id="metric-conversion-rate" style="color:#f59e0b;">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#6366f1,#0ea5e9);">🌐</div>
+                                    <div class="kpi-body"><h3>Top Language</h3><div class="metric-value" id="metric-language" style="font-size:1.4rem;text-transform:uppercase;">-</div></div>
+                                </div>
+                                <div class="metric-card kpi-card">
+                                    <div class="kpi-icon" style="background:linear-gradient(135deg,#d97706,#b45309);">📅</div>
+                                    <div class="kpi-body"><h3>Recent Query</h3><div class="metric-value" id="metric-recent" style="font-size:1.1rem;">-</div></div>
+                                </div>
+                            </div>
+
+                            <!-- Quota + Resolution bars -->
+                            <div class="card" style="margin-top:1.5rem;">
+                                <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+                                    <div style="flex:1;min-width:280px;">
+                                        <h3>📊 Monthly Message Quota</h3>
+                                        <div style="display:flex;justify-content:space-between;margin-bottom:5px;margin-top:0.8rem;">
+                                            <span id="quota-text" style="font-weight:bold;">Loading...</span>
+                                            <span id="quota-plan-badge" class="tenant-badge">Starter</span>
+                                        </div>
+                                        <div style="width:100%;height:14px;background:#e0e0e0;border-radius:7px;overflow:hidden;">
+                                            <div id="quota-progress-bar" style="height:100%;background:var(--primary);width:0%;transition:width 0.5s ease;border-radius:7px;"></div>
+                                        </div>
+                                        <div id="quota-pct-label" style="margin-top:5px;font-size:0.8rem;color:#888;text-align:right;">0%</div>
+                                    </div>
+                                    <div style="flex:1;min-width:280px;">
+                                        <h3>🔄 Resolution Status</h3>
+                                        <div style="display:flex;justify-content:space-between;margin-bottom:5px;margin-top:0.8rem;">
+                                            <span id="resolution-text" style="font-weight:bold;">Loading...</span>
+                                            <span class="tenant-badge" style="background:#eafaf1;color:#107c41;border:none;">Resolved</span>
+                                        </div>
+                                        <div style="width:100%;height:14px;background:#f8ca27;border-radius:7px;overflow:hidden;display:flex;">
+                                            <div id="resolution-progress-bar" style="height:100%;background:#107c41;width:0%;transition:width 0.5s ease;"></div>
+                                        </div>
+                                        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:0.8rem;color:#666;">
+                                            <span>✅ Resolved by AI</span><span>🤝 Requires Human</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Charts Row 1 -->
+                            <div class="charts-grid" style="margin-top:1.5rem;">
+                                <div class="card chart-card"><h3>🎯 Intent Distribution</h3><div class="chart-wrapper"><canvas id="chart-intent-pie"></canvas></div></div>
+                                <div class="card chart-card"><h3>📈 Conversations Over Time</h3><div class="chart-wrapper"><canvas id="chart-convos-line"></canvas></div></div>
+                            </div>
+
+                            <!-- Charts Row 2 -->
+                            <div class="charts-grid" style="margin-top:1.5rem;">
+                                <div class="card chart-card"><h3>✅ AI vs Human Resolution Over Time</h3><div class="chart-wrapper"><canvas id="chart-resolution-line"></canvas></div></div>
+                                <div class="card chart-card"><h3>❓ Top 10 Questions Asked</h3><div class="chart-wrapper"><canvas id="chart-top-questions"></canvas></div></div>
+                            </div>
+
+                            <!-- Charts Row 3 -->
+                            <div class="charts-grid" style="margin-top:1.5rem;">
+                                <div class="card chart-card"><h3>🌐 Language Distribution</h3><div class="chart-wrapper"><canvas id="chart-language-pie"></canvas></div></div>
+                                <div class="card chart-card"><h3>🕐 Peak Usage by Hour</h3><div class="chart-wrapper"><canvas id="chart-peak-hours"></canvas></div></div>
+                            </div>
+
+                            <!-- Funnel -->
+                            <div class="card" style="margin-top:1.5rem;">
+                                <h3>🔽 Lead Conversion Funnel</h3>
+                                <div id="funnel-chart-container" style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.6rem;align-items:center;"></div>
+                            </div>
+
+                        </div>
+                    </section>
+
+                    <!-- Tab: Incidents -->
+                    <section id="tab-incidents" class="content-section">
+                        <header class="section-header flex-header">
+                            <div>
+                                <h2>🛠 Incident Management</h2>
+                                <p style="color:var(--text-muted);margin-bottom:0;">All support incidents reported by your clients.</p>
+                            </div>
+                            <div style="display:flex;gap:0.5rem;">
+                                <button class="btn outline-btn" id="admin-inc-export-btn" style="font-size:0.85rem;padding:0.4rem 0.9rem;">⬇ Export CSV</button>
+                                <button class="btn outline-btn" id="admin-inc-refresh-btn" style="font-size:0.85rem;padding:0.4rem 0.9rem;">↻ Refresh</button>
+                            </div>
+                        </header>
+
+                        <!-- Stats Row -->
+                        <div id="inc-stats-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;">
+                            <div class="card" style="padding:1rem;margin-bottom:0;text-align:center;">
+                                <div style="font-size:0.7rem;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:0.3rem;">Open</div>
+                                <div id="stat-open" style="font-size:1.8rem;font-weight:700;color:#f59e0b;">—</div>
+                            </div>
+                            <div class="card" style="padding:1rem;margin-bottom:0;text-align:center;">
+                                <div style="font-size:0.7rem;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:0.3rem;">In Progress</div>
+                                <div id="stat-in-progress" style="font-size:1.8rem;font-weight:700;color:#3b82f6;">—</div>
+                            </div>
+                            <div class="card" style="padding:1rem;margin-bottom:0;text-align:center;">
+                                <div style="font-size:0.7rem;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:0.3rem;">Resolved</div>
+                                <div id="stat-resolved" style="font-size:1.8rem;font-weight:700;color:#10b981;">—</div>
+                            </div>
+                            <div class="card" style="padding:1rem;margin-bottom:0;text-align:center;">
+                                <div style="font-size:0.7rem;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;margin-bottom:0.3rem;">Avg. Resolution</div>
+                                <div id="stat-avg-res" style="font-size:1.8rem;font-weight:700;color:var(--primary);">—</div>
+                            </div>
+                        </div>
+
+                        <!-- Severity + Category Summary -->
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                            <div class="card bg-light" style="padding:1rem;margin-bottom:0;">
+                                <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.75rem;">By Severity</div>
+                                <div id="stat-by-severity" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+                            </div>
+                            <div class="card bg-light" style="padding:1rem;margin-bottom:0;">
+                                <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.75rem;">By Category</div>
+                                <div id="stat-by-category" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Filters + Table Side-by-Side -->
+                        <div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap;margin-bottom:2rem;">
+
+                            <!-- Left: Filters -->
+                            <div class="card bg-light" style="flex:0 0 220px;min-width:200px;padding:1.25rem 1rem;">
+                                <h4 style="margin:0 0 1rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Filters</h4>
+                                <div class="input-group" style="margin-bottom:0.75rem;">
+                                    <label for="inc-filter-status" style="font-size:0.8rem;">Filter by Status</label>
+                                    <select id="inc-filter-status" style="padding:0.4rem;width:100%;">
+                                        <option value="">All Statuses</option>
+                                        <option value="open">Open</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="resolved">Resolved</option>
+                                        <option value="closed">Closed</option>
+                                    </select>
+                                </div>
+                                <div class="input-group" style="margin-bottom:1rem;">
+                                    <label for="inc-filter-severity" style="font-size:0.8rem;">Filter by Severity</label>
+                                    <select id="inc-filter-severity" style="padding:0.4rem;width:100%;">
+                                        <option value="">All Severities</option>
+                                        <option value="critical">Critical</option>
+                                        <option value="high">High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </div>
+                                <button class="btn primary-btn" id="inc-filter-apply-btn" style="width:100%;padding:0.45rem 1rem;font-size:0.85rem;margin-bottom:0.5rem;">Apply Filter</button>
+                                <button class="btn outline-btn" id="inc-filter-reset-btn" style="width:100%;padding:0.45rem 1rem;font-size:0.85rem;margin-bottom:0;">Reset</button>
+                            </div>
+
+                            <!-- Right: Incidents Table -->
+                            <div style="flex:1;min-width:0;">
+                                <div class="card no-pad">
+                                    <div class="table-responsive">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Date</th>
+                                                    <th>Client</th>
+                                                    <th>Title</th>
+                                                    <th>Category</th>
+                                                    <th>Severity</th>
+                                                    <th>Status</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="admin-incidents-list"></tbody>
+                                        </table>
+                                    </div>
+                                    <div id="admin-no-incidents" class="empty-state" style="display:none;">No incidents found.</div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Respond / Update Panel (shown when a row is clicked) -->
+                        <div id="inc-detail-panel" class="card" style="display:none;">
+                            <h3 id="inc-detail-title" style="margin-bottom:0.25rem;">Incident Details</h3>
+                            <p id="inc-detail-meta" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem;"></p>
+                            <div class="card bg-light" style="margin-bottom:1rem;padding:1rem;">
+                                <strong>Description:</strong>
+                                <p id="inc-detail-desc" style="margin-top:0.4rem;color:#374151;white-space:pre-wrap;"></p>
+                            </div>
+                            <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+                                <div class="input-group" style="flex:1;min-width:180px;">
+                                    <label for="inc-update-status">Update Status</label>
+                                    <select id="inc-update-status">
+                                        <option value="open">Open</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="resolved">Resolved</option>
+                                        <option value="closed">Closed</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="input-group" style="margin-bottom:1rem;">
+                                <label for="inc-response-text">Your Response to Client</label>
+                                <textarea id="inc-response-text" rows="4" placeholder="Write your response here. The client will see this in their admin panel and receive an email notification..." maxlength="3000"></textarea>
+                            </div>
+                            <div class="input-group" style="margin-bottom:1rem;">
+                                <label for="inc-notes-text" style="display:flex;align-items:center;gap:0.4rem;">
+                                    🔒 Internal Notes
+                                    <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">(only you can see this — never shown to client)</span>
+                                </label>
+                                <textarea id="inc-notes-text" rows="3" placeholder="e.g. Waiting on vendor reply, escalated to dev team..." maxlength="2000" style="background:#fffbf0;border-color:#fde0c4;"></textarea>
+                            </div>
+                            <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                                <button class="btn primary-btn" id="inc-save-btn">💾 Save Response</button>
+                                <button class="btn danger-btn" id="inc-delete-btn">🗑 Delete Incident</button>
+                                <button class="btn outline-btn" id="inc-close-panel-btn">✕ Close</button>
+                            </div>
+                            <div id="inc-save-msg" style="margin-top:0.5rem;font-size:0.9rem;"></div>
+                        </div>
+                    </section>
+
+                </main>
+            </div>
+        </div>
+    </div>
+    <!-- Bootstrap Modal for Deactivation / Delete -->
+    <div class="modal fade" id="actionModal" tabindex="-1" aria-labelledby="actionModalLabel" aria-hidden="true" style="z-index: 1055;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 1.5rem;">
+                    <h5 class="modal-title" id="actionModalLabel" style="font-weight: 600; font-size: 1.1rem; color: var(--text-main);">Confirm Action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="actionModalBody" style="padding: 1.5rem; font-size: 1rem; color: var(--text-muted);">
+                    Are you sure you want to proceed?
+                </div>
+                <div class="modal-footer" style="border-top: none; padding: 1rem 1.5rem 1.5rem;">
+                    <button type="button" class="btn outline-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn primary-btn" id="actionModalConfirmBtn">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Toast for Success Notification -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1060;">
+        <div id="successToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="border-radius: 8px;">
+            <div class="toast-header" style="background-color: var(--success-color, #16a34a); color: white; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+                <strong class="me-auto">Success</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="successToastBody" style="background: white; color: var(--text-main); font-size: 0.95rem;">
+                Action completed successfully.
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="script.js?v=4"></script>
+</body>
+</html>
