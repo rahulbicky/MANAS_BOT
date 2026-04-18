@@ -44,11 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const tenantsList = document.getElementById('tenants-list');
     const noTenants = document.getElementById('no-tenants');
 
-    // Billing View
-    const chargeClientForm = document.getElementById('charge-client-form');
-    const chargeTenantId = document.getElementById('charge-tenant-id');
-    const chargeError = document.getElementById('charge-error');
-    const invoicesList = document.getElementById('invoices-list');
     // Tab: Identity
     const profileForm = document.getElementById('profile-form');
     const profileMsg = document.getElementById('profile-msg');
@@ -215,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(btn.dataset.target).classList.add('active');
 
             // Show global settings if returning to global tabs
-            if (['tab-register', 'tab-clients', 'tab-billing', 'tab-plans', 'tab-incidents'].includes(btn.dataset.target)) {
+            if (['tab-register', 'tab-clients', 'tab-plans', 'tab-incidents'].includes(btn.dataset.target)) {
                 const regBtn = document.querySelector('.nav-btn[data-target="tab-register"]');
                 if (regBtn) regBtn.style.display = 'block';
                 const configMenu = document.getElementById('client-configs-menu');
@@ -226,11 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Use in-memory globalTenants — do NOT re-fetch on every tab click
             if (btn.dataset.target === 'tab-clients') renderTenantsTable();
-            if (btn.dataset.target === 'tab-billing') {
-                updateChargeClientDropdown();
-                updateChargePlanDropdown();
-                loadInvoices();
-            }
             if (btn.dataset.target === 'tab-plans') {
                 renderPlansTable();
             }
@@ -250,8 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabId === 'tab-register') {
             return;
         }
-        if (tabId === 'tab-billing' || tabId === 'tab-plans') {
-            // Billing & Plans tabs handle their own data loading
+        if (tabId === 'tab-plans') {
             return;
         }
 
@@ -344,22 +333,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 globalTenants = await res.json();
                 renderTenantsTable();
-                updateChargeClientDropdown();
             }
         } catch (err) {
             console.error('Failed to load tenants:', err);
         }
-    }
-
-    function updateChargeClientDropdown() {
-        if (!chargeTenantId) return;
-        chargeTenantId.innerHTML = '<option value="" disabled selected>-- Select a Client --</option>';
-        globalTenants.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = `${t.name} (ID: ${t.id.substring(0,8)})`;
-            chargeTenantId.appendChild(opt);
-        });
     }
 
     // --- Search & Pagination Handlers ---
@@ -1021,77 +998,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- Billing & Invoices ---
-    chargeClientForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const btn = chargeClientForm.querySelector('button[type="submit"]');
-        btn.disabled = true;
-        chargeError.textContent = '';
-
-        const payload = {
-            tenant_id: chargeTenantId.value,
-            plan_name: document.getElementById('charge-plan').value,
-            amount_inr: parseFloat(document.getElementById('charge-amount').value)
-        };
-
-        try {
-            const res = await fetch(`${API_BASE}/admin/charge-client`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                alert('Payment recorded and subscription extended successfully!');
-                chargeClientForm.reset();
-                loadAllTenants();
-                loadInvoices();
-            } else {
-                const data = await res.json();
-                chargeError.textContent = data.detail || 'Failed to charge client.';
-            }
-        } catch (err) {
-            chargeError.textContent = 'Connection error.';
-        } finally {
-            btn.disabled = false;
-        }
-    });
-
-    async function loadInvoices() {
-        try {
-            const res = await fetch(`${API_BASE}/admin/invoices`);
-            if(res.ok) {
-                const invoices = await res.json();
-                renderInvoices(invoices);
-            }
-        } catch(err) {
-            console.error('Failed to load invoices', err);
-        }
-    }
-
-    function renderInvoices(invoices) {
-        invoicesList.innerHTML = '';
-        if (invoices.length === 0) {
-            invoicesList.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem;">No payment records found.</td></tr>';
-            return;
-        }
-
-        invoices.reverse().forEach(inv => {
-            const tr = document.createElement('tr');
-
-            const t = globalTenants.find(x => x.id === inv.tenant_id);
-            const tName = t ? t.name : 'Unknown';
-
-            tr.innerHTML = `
-                <td><small><code>${inv.id.substring(0,8)}...</code></small></td>
-                <td><strong>${escapeHTML(tName)}</strong><br><small style="color:#666">${inv.tenant_id}</small></td>
-                <td><span class="tenant-badge">${escapeHTML(inv.plan_name)}</span></td>
-                <td><strong>₹${(inv.amount_inr || inv.amount_usd || 0).toFixed(2)}</strong></td>
-                <td><span style="color:var(--success-color); font-weight:bold;">${inv.status}</span></td>
-                <td><small>${inv.payment_date.split('.')[0].replace('T', ' ')}</small></td>
-            `;
-            invoicesList.appendChild(tr);
-        });
-    }
 
     // --- Manage Plans ---
     async function loadPlans() {
@@ -1102,7 +1008,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (document.getElementById('tab-plans').classList.contains('active')) {
                     renderPlansTable();
                 }
-                updateChargePlanDropdown();
             }
         } catch (err) { console.error('Failed to load plans', err); }
     }
@@ -1130,17 +1035,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
             `;
             plansList.appendChild(tr);
-        });
-    }
-
-    function updateChargePlanDropdown() {
-        if (!chargePlanSelect) return;
-        chargePlanSelect.innerHTML = '<option value="" disabled selected>-- Select a Plan --</option>';
-        globalPlans.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.name;
-            opt.textContent = `${p.name} (₹${p.price_inr}/mo)`;
-            chargePlanSelect.appendChild(opt);
         });
     }
 
