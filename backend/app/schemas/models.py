@@ -47,38 +47,39 @@ class FAQResponse(FAQBase):
 # ── Business Profile ────────────────────────────────────────────────────────
 
 class BusinessProfileBase(BaseModel):
-    company_name: str
-    industry: str
-    business_description: str
-    website: str = ""
-    support_email: str = ""
-    phone: str = ""
+    # FIX 2: All fields are Optional so partial updates (e.g. chatbot settings form) don't fail validation
+    company_name: Optional[str] = None
+    industry: Optional[str] = None
+    business_description: Optional[str] = None
+    website: Optional[str] = None
+    support_email: Optional[str] = None
+    phone: Optional[str] = None
 
     # 1. Point of Contact
-    contact_person_name: str = ""
-    contact_person_role: str = ""
-    contact_person_email: str = ""
-    contact_person_phone: str = ""
+    contact_person_name: Optional[str] = None
+    contact_person_role: Optional[str] = None
+    contact_person_email: Optional[str] = None
+    contact_person_phone: Optional[str] = None
 
     # 2. Location & Operations
-    address_street: str = ""
-    city: str = ""
-    state: str = ""
-    country: str = ""
-    zip_code: str = ""
-    timezone: str = ""
-    business_hours: str = ""
+    address_street: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    zip_code: Optional[str] = None
+    timezone: Optional[str] = None
+    business_hours: Optional[str] = None
 
     # 3. Branding & UI Customization
-    brand_color_primary: str = ""
-    brand_color_secondary: str = ""
-    social_linkedin: str = ""
-    social_twitter: str = ""
-    social_instagram: str = ""
+    brand_color_primary: Optional[str] = None
+    brand_color_secondary: Optional[str] = None
+    social_linkedin: Optional[str] = None
+    social_twitter: Optional[str] = None
+    social_instagram: Optional[str] = None
 
-    logo_url: str = ""
-    chatbot_greeting_message: str = "Hi! How can I help you today?"
-    chatbot_system_prompt: str = "You are a helpful customer support assistant."
+    logo_url: Optional[str] = None
+    chatbot_greeting_message: Optional[str] = None
+    chatbot_system_prompt: Optional[str] = None
 
 
 # ── Chat Logs ───────────────────────────────────────────────────────────────

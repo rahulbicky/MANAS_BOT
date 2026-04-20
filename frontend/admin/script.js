@@ -110,6 +110,41 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.show();
     }
 
+    // FIX 4: Styled credentials display — replaces insecure alert popup
+    function showRegistrationCredentials(clientName, username) {
+        // Remove any stale instance
+        const existing = document.getElementById('reg-creds-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'reg-creds-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:#fff;border-radius:12px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+                <h5 style="margin:0 0 0.25rem;font-size:1.15rem;color:#166534;">&#10003; Client Registered</h5>
+                <p style="margin:0 0 1.25rem;color:#555;font-size:0.9rem;"><strong>${clientName}</strong> has been added to the platform.</p>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0.9rem 1rem;margin-bottom:1rem;">
+                    <div style="font-size:0.75rem;color:#166534;font-weight:600;margin-bottom:0.35rem;">LOGIN USERNAME</div>
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <code id="reg-username-val" style="font-size:0.95rem;font-weight:600;color:#1e293b;flex:1;">${username}</code>
+                        <button id="reg-copy-btn" style="border:1px solid #86efac;background:#dcfce7;color:#166534;border-radius:6px;padding:4px 10px;font-size:0.78rem;cursor:pointer;">Copy</button>
+                    </div>
+                </div>
+                <p style="font-size:0.8rem;color:#64748b;margin:0 0 1.25rem;">Share this username with your client so they can log in. Send their password securely (e.g. via email). The API key is only visible in the client list — do not share it.</p>
+                <button id="reg-creds-close" style="width:100%;padding:0.55rem;background:#1e40af;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Done</button>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        document.getElementById('reg-copy-btn').addEventListener('click', () => {
+            navigator.clipboard.writeText(username).then(() => {
+                document.getElementById('reg-copy-btn').textContent = 'Copied!';
+                setTimeout(() => { const b = document.getElementById('reg-copy-btn'); if (b) b.textContent = 'Copy'; }, 2000);
+            });
+        });
+        document.getElementById('reg-creds-close').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    }
+
     // Initialization
     if (isAuthenticated) {
         showView('dashboard');
@@ -531,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 createForm.reset();
                 showSuccessToast(`Client '${data.name}' registered successfully!`);
-                alert(`IMPORTANT REGISTRATION INFO:\n\nClient '${data.name}' registered!\nUsername: ${data.username}\nAPI Key: ${data.api_key}\n\nShare the login username (above) with your client. Do NOT share the API key.`);
+                showRegistrationCredentials(data.name, data.username);
                 await loadAllTenants();
             } else {
                 const err = await res.json();

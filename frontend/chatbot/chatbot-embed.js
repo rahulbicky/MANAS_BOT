@@ -162,8 +162,12 @@
 
     let isOpen = false;
     let chatEnded = false;
+    let feedbackCollected = false;  // true once feedback is submitted or skipped
+    let closeAfterFeedback = false; // set by ❌ click to close window after feedback
     let sessionId = sessionStorage.getItem('cb_session_id') || 'sess_' + Math.random().toString(36).substring(2, 9);
     sessionStorage.setItem('cb_session_id', sessionId);
+    let customGreeting = 'Connected to secure chat. How can we help?';
+    let lastBotMsg = '';
 
     // Inactivity timer – triggers feedback after 5 minutes of no user messages
     const INACTIVITY_MS = 5 * 60 * 1000;
@@ -173,7 +177,7 @@
         if (chatEnded) return;
         clearTimeout(inactivityTimer);
         inactivityTimer = setTimeout(() => {
-            if (!chatEnded) {
+            if (!chatEnded && !feedbackCollected) {
                 chatEnded = true;
                 cbInput.disabled = true;
                 document.getElementById('cb-send-btn').disabled = true;
@@ -182,10 +186,24 @@
         }, INACTIVITY_MS);
     }
 
+    // FIX 1 & 3: Apply brand colors and greeting from config
     fetch(`${API_BASE}/chat/config?tenant_id=${tenantId}`)
         .then(res => res.json())
         .then(data => {
-            if (data && data.company_name) titleEl.textContent = data.company_name + " Support";
+            if (!data) return;
+            if (data.company_name) titleEl.textContent = data.company_name + ' Support';
+            if (data.chatbot_greeting_message) customGreeting = data.chatbot_greeting_message;
+            if (data.brand_color_primary) {
+                const root = document.documentElement;
+                const primary = data.brand_color_primary;
+                const secondary = data.brand_color_secondary || primary;
+                root.style.setProperty('--cb-primary', primary);
+                root.style.setProperty('--cb-secondary', secondary);
+                root.style.setProperty('--cb-primary-dark', secondary);
+                root.style.setProperty('--cb-gradient', `linear-gradient(135deg, ${secondary} 0%, ${primary} 100%)`);
+                root.style.setProperty('--cb-shadow-lg', `0 20px 25px -5px ${primary}40`);
+                root.style.setProperty('--cb-text-main', primary);
+            }
         });
 
     toggleBtn.onclick = () => {
@@ -193,16 +211,37 @@
         cbWindow.style.display = 'flex';
         if (window.innerWidth <= 480) toggleBtn.style.display = 'none';
         if (msgsArea.querySelectorAll('.cb-msg:not(.cb-system)').length === 0) {
-            appendMsg('system', 'Connected to secure chat. How can we help?');
+            appendMsg('system', customGreeting);
         }
         setTimeout(() => cbInput.focus(), 100);
     };
 
-    closeBtn.onclick = () => {
+    function doClose() {
         isOpen = false;
         cbWindow.style.display = 'none';
         toggleBtn.style.display = 'flex';
+        closeAfterFeedback = false;
+    }
+
+    closeBtn.onclick = () => {
+        // If user has sent at least one message and feedback hasn't been collected, show feedback first
+        const hasUserMsg = msgsArea.querySelectorAll('.cb-msg.cb-user').length > 0;
+        if (!feedbackCollected && hasUserMsg) {
+            closeAfterFeedback = true;
+            if (!chatEnded) {
+                chatEnded = true;
+                cbInput.disabled = true;
+                document.getElementById('cb-send-btn').disabled = true;
+                clearTimeout(inactivityTimer);
+            }
+            showFeedbackUI();
+            return;
+        }
+        doClose();
     };
+
+    // FIX 5: End-of-conversation patterns — intercepted client-side to avoid re-triggering lead capture
+    const END_OF_CONV_PATTERNS = /^(no|nope|no thanks|no thank you|nothing|nothing else|that('?s| is) all|i('?m| am) done|done|all good|i('?m| am) good|goodbye|bye|thanks|thank you|ok bye|okay bye|no more|nah)[\s.!]*$/i;
 
     cbForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -213,7 +252,18 @@
         appendMsg('user', text);
         cbInput.value = '';
 
-        // Reset the 5-minute inactivity countdown on each user message
+        // FIX 5: If previous bot message asked "Do you want to know something else?" and user declines, end gracefully
+        const botAskedMore = /do you (want|need|have)|anything else|something else|help you with|can i (assist|help)/i.test(lastBotMsg);
+        if (botAskedMore && END_OF_CONV_PATTERNS.test(text)) {
+            chatEnded = true;
+            cbInput.disabled = true;
+            document.getElementById('cb-send-btn').disabled = true;
+            clearTimeout(inactivityTimer);
+            appendMsg('bot', 'Thank you! Please take a moment to share your feedback.');
+            showFeedbackUI(); // immediate — no artificial delay
+            return;
+        }
+
         resetInactivityTimer();
 
         const typingId = showTyping();
@@ -226,6 +276,7 @@
             });
             const data = await res.json();
             removeTyping(typingId);
+            lastBotMsg = data.answer;
             appendMsg('bot', data.answer);
         } catch (err) {
             removeTyping(typingId);
@@ -279,18 +330,33 @@
     }
 
     function showFeedbackUI() {
+        // Prevent duplicate feedback widgets
+        if (document.getElementById('cb-feedback-widget')) return;
+
         const wrapper = document.createElement('div');
+        wrapper.id = 'cb-feedback-widget';
         wrapper.style.cssText = 'background:#fefce8;border:1px solid #fef08a;color:#854d0e;border-radius:12px;padding:1rem;margin-top:0.5rem;';
         wrapper.innerHTML = `
             <div style="font-weight:600;margin-bottom:0.5rem;text-align:center;">How was your experience?</div>
             <div id="cb-star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:1.5rem;cursor:pointer;margin-bottom:0.5rem;">
                 <span data-val="1">&#9734;</span><span data-val="2">&#9734;</span><span data-val="3">&#9734;</span><span data-val="4">&#9734;</span><span data-val="5">&#9734;</span>
             </div>
-            <textarea id="cb-fb-comment" placeholder="Any comments?" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:4px;padding:0.4rem;font-size:0.8rem;margin-bottom:0.5rem;font-family:inherit;"></textarea>
-            <button id="cb-fb-submit" style="width:100%;padding:0.4rem;background:#ca8a04;color:white;border:none;border-radius:4px;font-weight:600;cursor:pointer;">Submit Feedback</button>
+            <textarea id="cb-fb-comment" placeholder="Any comments? (optional)" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:4px;padding:0.4rem;font-size:0.8rem;margin-bottom:0.5rem;font-family:inherit;resize:none;rows:2;"></textarea>
+            <div style="display:flex;gap:0.5rem;">
+                <button id="cb-fb-submit" style="flex:1;padding:0.4rem;background:#ca8a04;color:white;border:none;border-radius:4px;font-weight:600;cursor:pointer;">Submit</button>
+                <button id="cb-fb-skip" style="padding:0.4rem 0.8rem;background:transparent;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:0.8rem;cursor:pointer;">Skip</button>
+            </div>
         `;
         msgsArea.appendChild(wrapper);
         msgsArea.scrollTop = msgsArea.scrollHeight;
+
+        function finishFeedback(thankyouText) {
+            feedbackCollected = true;
+            wrapper.innerHTML = `<div style="text-align:center;padding:0.5rem;font-weight:600;">${thankyouText}</div>`;
+            if (closeAfterFeedback) {
+                setTimeout(() => doClose(), 900);
+            }
+        }
 
         let rating = 0;
         const stars = wrapper.querySelectorAll('#cb-star-rating span');
@@ -306,20 +372,27 @@
 
         wrapper.querySelector('#cb-fb-submit').addEventListener('click', async (e) => {
             const btn = e.target;
-            if (rating === 0) return alert('Please select a star rating.');
+            if (rating === 0) {
+                wrapper.querySelector('#cb-star-rating').style.outline = '2px solid #d97706';
+                return;
+            }
             btn.disabled = true;
-            btn.textContent = 'Submitting...';
+            btn.textContent = 'Sending...';
             try {
                 await fetch(`${API_BASE}/chat/feedback`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tenant_id: tenantId, session_id: sessionId, rating, comment: wrapper.querySelector('#cb-fb-comment').value.trim() })
                 });
-                wrapper.innerHTML = '<div style="text-align:center;padding:0.5rem;font-weight:600;">Thank you for your feedback! 🙏</div>';
-            } catch (e) {
+                finishFeedback('Thank you for your feedback! &#x1F64F;');
+            } catch {
                 btn.disabled = false;
                 btn.textContent = 'Retry';
             }
+        });
+
+        wrapper.querySelector('#cb-fb-skip').addEventListener('click', () => {
+            finishFeedback('Feedback skipped. Have a great day!');
         });
     }
 })();
