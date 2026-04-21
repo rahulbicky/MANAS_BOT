@@ -2,8 +2,8 @@ const API_BASE = 'https://manasbot.onrender.com';
 
 // Render Static Site URLs for the other two frontends.
 // IMPORTANT: Replace these with your actual Render static site URLs after deployment.
-const CLIENT_CHATBOT_URL = 'https://chat-bot-1-neu-1-rf14.onrender.com/';
-const CLIENT_ADMIN_URL = 'https://chat-bot-1-neu.onrender.com/';
+const CLIENT_CHATBOT_URL = 'https://manasbot-chatbot-widget.onrender.com';
+const CLIENT_ADMIN_URL = 'https://manasbot-1.onrender.com';
 
 // Global Fetch Interceptor to attach X-Auth-Token automatically
 const originalFetch = window.fetch;
