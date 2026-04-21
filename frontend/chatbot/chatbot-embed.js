@@ -5,7 +5,7 @@
 (function () {
     const scriptTag = document.currentScript;
     const tenantId = scriptTag ? scriptTag.getAttribute('data-tenant-id') || 'test_tenant' : 'test_tenant';
-    const API_BASE = 'https://chat-bot-1-neu-1.onrender.com';
+    const API_BASE = 'https://manasbot.onrender.com';
 
     // 1. Load Fonts
     const link = document.createElement('link');

@@ -1,4 +1,4 @@
-const API_BASE = 'https://chat-bot-1-neu-1.onrender.com';
+const API_BASE = 'https://manasbot.onrender.com';
 
 // Render Static Site URLs for the other two frontends.
 // IMPORTANT: Replace these with your actual Render static site URLs after deployment.
@@ -97,16 +97,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const modal = new bootstrap.Modal(modalEl);
-        
+
         const confirmBtn = document.getElementById('actionModalConfirmBtn');
         const newBtn = confirmBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-        
+
         newBtn.addEventListener('click', () => {
             modal.hide();
             onConfirm();
         });
-        
+
         modal.show();
     }
 
@@ -386,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const prevBtn = document.getElementById('clients-prev-btn');
     const nextBtn = document.getElementById('clients-next-btn');
-    
+
     if (prevBtn) {
         prevBtn.addEventListener('click', () => {
             if (currentPage > 1) { currentPage--; renderTenantsTable(); }
@@ -411,12 +411,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderTenantsTable() {
         tenantsList.innerHTML = '';
-        
+
         // 1. Filter
         let filtered = globalTenants;
         if (currentSearchTerm) {
-            filtered = globalTenants.filter(t => 
-                t.name.toLowerCase().includes(currentSearchTerm) || 
+            filtered = globalTenants.filter(t =>
+                t.name.toLowerCase().includes(currentSearchTerm) ||
                 (t.username && t.username.toLowerCase().includes(currentSearchTerm))
             );
         }
@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filtered.sort((a, b) => {
             let valA = a[currentSortColumn];
             let valB = b[currentSortColumn];
-            
+
             if (currentSortColumn === 'name') {
                 valA = valA ? valA.toLowerCase() : '';
                 valB = valB ? valB.toLowerCase() : '';
@@ -436,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 valA = valA ? 1 : 0;
                 valB = valB ? 1 : 0;
             }
-            
+
             if (valA < valB) return currentSortAsc ? -1 : 1;
             if (valA > valB) return currentSortAsc ? 1 : -1;
             return 0;
@@ -446,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalItems = filtered.length;
         const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
         if (currentPage > totalPages) currentPage = totalPages;
-        
+
         const startIdx = (currentPage - 1) * itemsPerPage;
         const endIdx = startIdx + itemsPerPage;
         const paginated = filtered.slice(startIdx, endIdx);
@@ -454,10 +454,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update UI info
         const infoEl = document.getElementById('clients-page-info');
         if (infoEl) infoEl.textContent = `Showing ${totalItems === 0 ? 0 : startIdx + 1} to ${Math.min(endIdx, totalItems)} of ${totalItems} entries`;
-        
+
         const numEl = document.getElementById('clients-page-num');
         if (numEl) numEl.textContent = currentPage;
-        
+
         if (prevBtn) prevBtn.disabled = currentPage === 1;
         if (nextBtn) nextBtn.disabled = currentPage === totalPages;
 
@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('profile-social-li').value = p.social_linkedin || '';
                 document.getElementById('profile-social-tw').value = p.social_twitter || '';
                 document.getElementById('profile-social-ig').value = p.social_instagram || '';
-                
+
                 document.getElementById('profile-chatbot-greeting').value = p.chatbot_greeting_message || '';
                 document.getElementById('profile-chatbot-prompt').value = p.chatbot_system_prompt || '';
 
@@ -645,7 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const logoPlaceholder = document.getElementById('logo-placeholder');
                 const clearLogoBtn = document.getElementById('clear-logo-btn');
                 const fileInput = document.getElementById('profile-logo');
-                
+
                 logoB64.value = p.logo_url || '';
                 fileInput.value = ''; // clear any selected file
                 if (p.logo_url) {
@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Compress heavily to avoid DB bloat (webp or jpeg preferred)
                 let mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
                 const dataUrl = canvas.toDataURL(mimeType, 0.7);
-                
+
                 logoB64Input.value = dataUrl;
                 logoPreview.src = dataUrl;
                 logoPreview.style.display = 'block';
@@ -1084,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('plan-faqs').value = p.faqs_limit;
         document.getElementById('plan-export').checked = p.export_enabled;
         document.getElementById('plan-languages').value = p.languages;
-        
+
         document.getElementById('plan-form-title').textContent = 'Edit Plan';
         document.getElementById('plan-submit-btn').textContent = 'Update Plan';
         document.getElementById('plan-cancel-btn').style.display = 'inline-block';
@@ -1106,7 +1106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         planForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             planError.textContent = '';
-            
+
             const payload = {
                 name: document.getElementById('plan-name').value,
                 price_inr: parseFloat(document.getElementById('plan-price').value),

@@ -1,6 +1,6 @@
 // Widget specific isolated JS
 (function () {
-    const API_BASE = 'https://chat-bot-1-neu-1.onrender.com';
+    const API_BASE = 'https://manasbot.onrender.com';
 
     // Get tenant ID from URL for testing, or use a default
     const urlParams = new URLSearchParams(window.location.search);

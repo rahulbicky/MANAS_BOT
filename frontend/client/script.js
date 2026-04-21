@@ -1,4 +1,4 @@
-const API_BASE = 'https://chat-bot-1-neu-1.onrender.com';
+const API_BASE = 'https://manasbot.onrender.com';
 
 // Global Fetch Interceptor to attach X-Auth-Token automatically
 const originalFetch = window.fetch;
@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         login: document.getElementById('login-view'),
         dashboard: document.getElementById('dashboard-view')
     };
-    
+
     // Auth & Navigation
     const loginForm = document.getElementById('login-form');
     const loginError = document.getElementById('login-error');
@@ -88,10 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const usernameInput = document.getElementById('username-input').value.trim();
         const pwd = document.getElementById('password').value;
         const btn = loginForm.querySelector('button');
-        
+
         btn.disabled = true;
         loginError.textContent = '';
-        
+
         try {
             // Step 1: resolve username → tenant_id
             const resolveRes = await fetch(`${API_BASE}/admin/resolve-username`, {
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tenant_id, password: pwd })
             });
-            
+
             if (res.ok) {
                 const data = await res.json();
                 tenantId = tenant_id;
@@ -147,10 +147,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if(btn.id === 'logout-btn') return;
             navBtns.forEach(b => b.classList.remove('active'));
             sections.forEach(s => s.classList.remove('active'));
-            
+
             btn.classList.add('active');
             document.getElementById(btn.dataset.target).classList.add('active');
-            
+
             // Use cached data — don't re-fetch on every tab click
             if (btn.dataset.target === 'section-analytics') {
                 const filtered = filterByDays(globalChatsData, _activeDateFilter);
@@ -218,11 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sidebarName) sidebarName.textContent = data.name;
                 const banner = document.getElementById('billing-banner');
                 banner.style.display = 'block';
-                
+
                 if (data.subscription_end_date) {
                     const endDate = new Date(data.subscription_end_date);
                     const now = new Date();
-                    
+
                     if (endDate > now) {
                         const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
                         banner.style.backgroundColor = 'var(--success-color)';
@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         banner.style.backgroundColor = 'var(--danger-color)';
                         banner.style.color = 'white';
                         banner.innerHTML = `Subscription Status: <span style="font-weight:normal">Expired</span> &bull; Your chatbot will not answer new customer requests. Please contact support to renew.`;
-                        
+
                         // Disable admin actions
                         const disableEl = id => {
                             const e = document.getElementById(id);
@@ -665,10 +665,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Exports (CSV / EXCEL) ---
     btnExportCsv.addEventListener('click', () => {
         if (!globalChatsData || globalChatsData.length === 0) return alert("No data to export");
-        
+
         let csvContent = "data:text/csv;charset=utf-8,";
         csvContent += "created_at,question,answer,intent,page_url\n"; // Headers
-        
+
         globalChatsData.forEach(function(rowArray) {
             // Escape quotes inside fields
             const q = `"${rowArray.question.replace(/"/g, '""')}"`;
@@ -701,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const worksheet = XLSX.utils.json_to_sheet(exportData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "ChatLogs");
-        
+
         // Let SheetJS download it
         XLSX.writeFile(workbook, "chat_logs.xlsx");
     });
@@ -741,19 +741,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sidebarName && sidebarName.textContent === 'Loading...') {
                     sidebarName.textContent = profile.company_name || 'Dashboard';
                 }
-                
+
                 document.getElementById('profile-contact-name').value = profile.contact_person_name || '';
                 document.getElementById('profile-contact-role').value = profile.contact_person_role || '';
                 document.getElementById('profile-contact-email').value = profile.contact_person_email || '';
                 document.getElementById('profile-contact-phone').value = profile.contact_person_phone || '';
-                
+
                 document.getElementById('profile-address-street').value = profile.address_street || '';
                 document.getElementById('profile-city').value = profile.city || '';
                 document.getElementById('profile-state').value = profile.state || '';
                 document.getElementById('profile-country').value = profile.country || '';
                 document.getElementById('profile-zip').value = profile.zip_code || '';
                 document.getElementById('profile-timezone').value = profile.timezone || '';
-                
+
                 document.getElementById('profile-brand-primary').value = profile.brand_color_primary || '';
                 document.getElementById('profile-brand-secondary').value = profile.brand_color_secondary || '';
                 document.getElementById('profile-social-li').value = profile.social_linkedin || '';
@@ -772,12 +772,12 @@ document.addEventListener('DOMContentLoaded', () => {
             industry: document.getElementById('industry').value,
             business_description: document.getElementById('biz-desc').value,
             business_hours: document.getElementById('profile-hours').value,
-            
+
             contact_person_name: document.getElementById('profile-contact-name').value,
             contact_person_role: document.getElementById('profile-contact-role').value,
             contact_person_email: document.getElementById('profile-contact-email').value,
             contact_person_phone: document.getElementById('profile-contact-phone').value,
-            
+
             address_street: document.getElementById('profile-address-street').value,
             city: document.getElementById('profile-city').value,
             state: document.getElementById('profile-state').value,
@@ -792,7 +792,7 @@ document.addEventListener('DOMContentLoaded', () => {
             social_instagram: document.getElementById('profile-social-ig').value
         };
         showMessage(profileMsg, 'Saving...', '');
-        
+
         try {
             const res = await fetch(`${API_BASE}/admin/profile?tenant_id=${tenantId}`, {
                 method: 'POST',
@@ -911,7 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FAQ Management ---
     addFaqBtn.addEventListener('click', () => { addFaqFormContainer.style.display = 'block'; });
-    cancelFaqBtn.addEventListener('click', () => { 
+    cancelFaqBtn.addEventListener('click', () => {
         addFaqFormContainer.style.display = 'none';
         addFaqForm.reset();
     });
@@ -967,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         noFaqs.style.display = 'none';
-        
+
         faqs.forEach(f => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -1009,13 +1009,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const formData = new FormData();
         formData.append('file', file);
-        
+
         try {
             const res = await fetch(`${API_BASE}/admin/upload-doc?tenant_id=${tenantId}`, {
                 method: 'POST',
                 body: formData
             });
-            
+
             if (res.ok) {
                 uploadStatus.style.color = '#107c41';
                 uploadStatus.textContent = ' Document uploaded and AI trained successfully!';
@@ -1057,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if(noDocs) noDocs.style.display = 'none';
-        
+
         docs.forEach(d => {
             const tr = document.createElement('tr');
             const isUrl = d.file_type === 'url';
@@ -1275,7 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.values(views).forEach(v => v.classList.remove('active'));
         if (views[viewName]) views[viewName].classList.add('active');
     }
-    
+
     function showMessage(el, text, type) {
         el.textContent = text;
         el.className = 'msg-text' + (type === 'success' ? ' msg-success' : (type==='error'?' error-text':''));
