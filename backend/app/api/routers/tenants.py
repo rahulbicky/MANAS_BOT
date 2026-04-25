@@ -42,6 +42,7 @@ def _build_tenant_response(t: dict) -> TenantResponse:
         deactivated_at=str(t.get("deactivated_at")) if t.get("deactivated_at") else None,
         current_plan=t.get("current_plan", "Starter"),
         limits=get_tenant_limits(t["id"]),
+        notification_email=t.get("notification_email", ""),
     )
 
 

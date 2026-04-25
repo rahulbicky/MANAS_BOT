@@ -848,3 +848,8 @@ FROM tenants LEFT OUTER JOIN plans AS plans_1 ON plans_1.id = tenants.current_pl
 2026-04-16 17:45:49 | INFO     | [Startup] Tenant schema migration complete for 5 tenant(s).
 2026-04-18 15:47:50 | INFO     | [Startup] Central DB tables ready.
 2026-04-18 15:53:14 | INFO     | [Startup] Central schema migration complete.
+2026-04-20 18:16:44 | INFO     | [Startup] Central DB tables ready.
+2026-04-20 18:18:51 | INFO     | [REQUEST] tenant=-  GET /favicon.ico  →  404  (1.1 ms)
+2026-04-20 18:18:59 | INFO     | [REQUEST] tenant=-  GET /redoc  →  200  (0.5 ms)
+2026-04-20 18:19:01 | INFO     | [REQUEST] tenant=-  GET /openapi.json  →  200  (810.7 ms)
+2026-04-20 18:20:49 | INFO     | [Startup] Central schema migration complete.

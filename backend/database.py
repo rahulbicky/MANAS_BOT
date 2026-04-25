@@ -498,6 +498,17 @@ def delete_incident(incident_id: str) -> bool:
     finally:
         session.close()
 
+def _fmt_dt(dt) -> str:
+    """Format a naive UTC datetime as an ISO 8601 string with +00:00 suffix.
+    Without this suffix, JavaScript's Date() treats the string as local time.
+    """
+    if dt is None:
+        return ""
+    if isinstance(dt, datetime.datetime):
+        return dt.strftime("%Y-%m-%dT%H:%M:%S") + "+00:00"
+    return str(dt)
+
+
 def _incident_to_dict(incident: Incident) -> dict:
     return {
         "id": incident.id,
@@ -510,9 +521,9 @@ def _incident_to_dict(incident: Incident) -> dict:
         "seller_response": incident.seller_response or "",
         "notes": incident.notes or "",
         "client_read": incident.client_read if incident.client_read is not None else True,
-        "created_at": str(incident.created_at),
-        "updated_at": str(incident.updated_at) if incident.updated_at else str(incident.created_at),
-        "resolved_at": str(incident.resolved_at) if incident.resolved_at else None,
+        "created_at": _fmt_dt(incident.created_at),
+        "updated_at": _fmt_dt(incident.updated_at) if incident.updated_at else _fmt_dt(incident.created_at),
+        "resolved_at": _fmt_dt(incident.resolved_at) if incident.resolved_at else None,
     }
 
 

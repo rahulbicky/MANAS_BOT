@@ -219,7 +219,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const banner = document.getElementById('billing-banner');
                 banner.style.display = 'block';
 
-                if (data.subscription_end_date) {
+                if (data.is_demo_account) {
+                    banner.style.backgroundColor = '#6366f1';
+                    banner.style.color = 'white';
+                    banner.innerHTML = `Subscription Status: <span style="font-weight:normal">Demo Account — Read-only preview mode</span>`;
+                } else if (data.subscription_end_date) {
                     const endDate = new Date(data.subscription_end_date);
                     const now = new Date();
 
@@ -717,6 +721,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('industry').value = profile.industry;
                 document.getElementById('biz-desc').value = profile.business_description;
                 document.getElementById('profile-hours').value = profile.business_hours || '';
+                document.getElementById('profile-website').value = profile.website || '';
+                document.getElementById('profile-support-email').value = profile.support_email || '';
+                document.getElementById('profile-phone').value = profile.phone || '';
 
                 document.getElementById('profile-logo-url').value = profile.logo_url || '';
                 document.getElementById('profile-chatbot-greeting').value = profile.chatbot_greeting_message || '';
@@ -772,6 +779,9 @@ document.addEventListener('DOMContentLoaded', () => {
             industry: document.getElementById('industry').value,
             business_description: document.getElementById('biz-desc').value,
             business_hours: document.getElementById('profile-hours').value,
+            website: document.getElementById('profile-website').value,
+            support_email: document.getElementById('profile-support-email').value,
+            phone: document.getElementById('profile-phone').value,
 
             contact_person_name: document.getElementById('profile-contact-name').value,
             contact_person_role: document.getElementById('profile-contact-role').value,

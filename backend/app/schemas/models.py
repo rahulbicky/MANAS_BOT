@@ -97,6 +97,7 @@ class ChatLogResponse(BaseModel):
     response_time_ms: int = 0
     feedback_rating: Optional[int] = None
     feedback_comment: Optional[str] = None
+    feedback_created_at: Optional[str] = None
     duration_seconds: Optional[int] = None
 
 
@@ -134,6 +135,7 @@ class TenantResponse(BaseModel):
     deactivated_at: Optional[str] = None
     current_plan: str = "Starter"
     limits: Optional[dict] = None
+    notification_email: Optional[str] = ""
 
 
 # ── Billing ─────────────────────────────────────────────────────────────────

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\Ajayr\\\\OneDrive\\\\Desktop\\\\NEU AI TECH\\\\CHATBOT PROJECT\\\\ManasBot\")",
+      "Bash(python *)"
+    ]
+  }
+}

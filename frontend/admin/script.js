@@ -470,10 +470,13 @@ document.addEventListener('DOMContentLoaded', () => {
         paginated.forEach(t => {
             const tr = document.createElement('tr');
 
-            // Calculate days left
+            // Calculate days left — demo accounts use a 10-year sentinel value, show "Demo" instead
             let subText = "Expired";
             let subStyle = "color: var(--danger-color); font-weight: bold;";
-            if (t.subscription_end_date) {
+            if (t.is_demo_account) {
+                subText = "Demo (no expiry)";
+                subStyle = "color: var(--text-muted);";
+            } else if (t.subscription_end_date) {
                 const endDate = new Date(t.subscription_end_date);
                 const now = new Date();
                 if (endDate > now) {
@@ -499,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
                 <td>
                     <small style="${subStyle}">${subText}</small><br>
-                    <small style="color:var(--text-muted); font-size:0.65rem;">Expires: ${t.subscription_end_date ? t.subscription_end_date.split('T')[0] : 'N/A'}</small>
+                    ${!t.is_demo_account ? `<small style="color:var(--text-muted); font-size:0.65rem;">Expires: ${t.subscription_end_date ? t.subscription_end_date.split('T')[0] : 'N/A'}</small>` : ''}
                 </td>
                 <td><small>${t.created_at.substring(0, 16)}</small></td>
                 <td><a href="${CLIENT_CHATBOT_URL}?tenant_id=${t.id}" target="_blank" class="btn outline-btn" style="padding:0.3rem 0.6rem; font-size:0.75rem; text-decoration:none;">Chatbot</a></td>

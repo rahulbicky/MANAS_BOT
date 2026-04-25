@@ -75,6 +75,7 @@ async def get_all_chats(tenant_id: str = Query(...), db: Session = Depends(get_t
                 "response_time_ms": getattr(log, "response_time_ms", 0),
                 "feedback_rating": fb_dict[log.session_id].rating if log.session_id in fb_dict else None,
                 "feedback_comment": fb_dict[log.session_id].comment if log.session_id in fb_dict else None,
+                "feedback_created_at": format_utc(fb_dict[log.session_id].created_at) if log.session_id in fb_dict else None,
                 "duration_seconds": session_durations.get(log.session_id)
             }
         )
