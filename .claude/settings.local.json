@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(dir \"C:\\\\Users\\\\Ajayr\\\\OneDrive\\\\Desktop\\\\NEU AI TECH\\\\CHATBOT PROJECT\\\\ManasBot\")",
-      "Bash(python *)",
-      "PowerShell(cd \"C:\\\\Users\\\\Ajayr\\\\OneDrive\\\\Desktop\\\\NEU AI TECH\\\\CHATBOT PROJECT\\\\ManasBot\"; $env:PYTHONIOENCODING='utf-8'; python test_employees.py; Write-Host \"EXIT:$LASTEXITCODE\")"
-    ]
-  }
-}
