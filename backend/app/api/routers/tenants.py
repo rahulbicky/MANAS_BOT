@@ -11,7 +11,7 @@ Routes:
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ....database import (
     register_tenant,
@@ -23,6 +23,7 @@ from ....database import (
     create_demo_tenant,
 )
 from ...schemas.models import TenantCreate, TenantResponse
+from ...core.security import require_role
 
 router = APIRouter(prefix="/admin", tags=["Tenants"])
 
@@ -46,7 +47,7 @@ def _build_tenant_response(t: dict) -> TenantResponse:
     )
 
 
-@router.post("/tenant", response_model=TenantResponse)
+@router.post("/tenant", response_model=TenantResponse, dependencies=[Depends(require_role("super_admin", "admin"))])
 async def register_tenant_endpoint(payload: TenantCreate):
     """Register a new client — creates their database tables automatically."""
     try:
@@ -65,7 +66,7 @@ async def register_tenant_endpoint(payload: TenantCreate):
     return _build_tenant_response(new_tenant)
 
 
-@router.post("/create-demo-tenant", response_model=TenantResponse)
+@router.post("/create-demo-tenant", response_model=TenantResponse, dependencies=[Depends(require_role("super_admin", "admin"))])
 async def create_demo_tenant_endpoint(payload: TenantCreate):
     """Create a new demo tenant with read-only and predefined data."""
     try:
@@ -75,7 +76,7 @@ async def create_demo_tenant_endpoint(payload: TenantCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/tenants", response_model=List[TenantResponse])
+@router.get("/tenants", response_model=List[TenantResponse], dependencies=[Depends(require_role("super_admin", "admin", "support"))])
 async def list_tenants(
     plan_name: Optional[str] = Query(None, description="Filter by plan name"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
@@ -97,7 +98,7 @@ async def list_tenants(
     return filtered_tenants
 
 
-@router.get("/tenant-info", response_model=TenantResponse)
+@router.get("/tenant-info", response_model=TenantResponse, dependencies=[Depends(require_role("super_admin", "admin", "support"))])
 async def get_tenant_info(tenant_id: str):
     """Get info for a specific tenant (used by client dashboard)."""
     t = get_tenant_by_id(tenant_id)
@@ -106,7 +107,7 @@ async def get_tenant_info(tenant_id: str):
     return _build_tenant_response(t)
 
 
-@router.delete("/tenant/{tenant_id}")
+@router.delete("/tenant/{tenant_id}", dependencies=[Depends(require_role("super_admin"))])
 async def deactivate_tenant_endpoint(tenant_id: str):
     """Deactivate a client (soft delete)."""
     success = deactivate_tenant(tenant_id)
@@ -115,7 +116,7 @@ async def deactivate_tenant_endpoint(tenant_id: str):
     return {"message": "Tenant deactivated."}
 
 
-@router.delete("/tenant/{tenant_id}/hard-delete")
+@router.delete("/tenant/{tenant_id}/hard-delete", dependencies=[Depends(require_role("super_admin"))])
 async def hard_delete_tenant_endpoint(tenant_id: str):
     """Permanently delete a client and drop their database."""
     success = delete_tenant_hard(tenant_id)

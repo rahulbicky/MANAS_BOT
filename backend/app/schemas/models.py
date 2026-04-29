@@ -187,6 +187,30 @@ class SellerAuthRequest(BaseModel):
     password: str
 
 
+class EmployeeLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class EmployeeLoginResponse(BaseModel):
+    authenticated: bool
+    token: str
+    role: str
+    name: str
+    email: str
+
+
+class EmployeeCreateRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str  # super_admin | admin | support | viewer
+
+
+class EmployeeRoleUpdateRequest(BaseModel):
+    role: str
+
+
 # ── Subscription / Billing helpers ──────────────────────────────────────────
 
 class ExtendSubscriptionRequest(BaseModel):

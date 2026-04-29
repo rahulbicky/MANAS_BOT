@@ -6,15 +6,16 @@ Routes:
   GET /admin/metrics  — live snapshot (seller/developer only)
 """
 import os
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from ....metrics_store import get_metrics_snapshot
 from ...core.config import ALERT_TRAFFIC_RPM, ALERT_ERROR_RATE_PCT, ALERT_TOKENS_PER_MIN
+from ...core.security import require_role
 
 router = APIRouter(prefix="/admin", tags=["Metrics"])
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
 async def get_live_metrics():
     """
     Returns a live snapshot of the last 60 seconds of activity.

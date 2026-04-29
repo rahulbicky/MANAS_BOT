@@ -1,23 +1,45 @@
-const API_BASE = 'https://manasbot.onrender.com';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://manasbot.onrender.com';
 
 // Render Static Site URLs for the other two frontends.
 // IMPORTANT: Replace these with your actual Render static site URLs after deployment.
 const CLIENT_CHATBOT_URL = 'https://manasbot-chatbot-widget.onrender.com';
 const CLIENT_ADMIN_URL = 'https://manasbot-1.onrender.com';
 
-// Global Fetch Interceptor to attach X-Auth-Token automatically
+// Global Fetch Interceptor — attaches auth headers to all /admin/ requests
+// New system: Authorization: Bearer <jwt> for employee-facing routes
+// Legacy: X-Auth-Token: super-admin-secret for per-tenant config routes (get_tenant_db)
 const originalFetch = window.fetch;
 window.fetch = async function() {
     let [resource, config] = arguments;
-    if (resource && typeof resource === 'string' && resource.includes('/admin/')) {
+    const isAdminUrl = resource && typeof resource === 'string' && resource.includes('/admin/');
+    const isAuthEndpoint = typeof resource === 'string' &&
+        (resource.includes('/admin/seller-auth') || resource.includes('/admin/employee-login'));
+
+    if (isAdminUrl) {
         config = config || {};
         config.headers = config.headers || {};
-        const token = sessionStorage.getItem('seller_token');
-        if (token && !resource.includes('/admin/auth') && !resource.includes('/admin/seller-auth')) {
-            config.headers['X-Auth-Token'] = token;
+        if (!isAuthEndpoint) {
+            const token = sessionStorage.getItem('seller_token');
+            if (token) config.headers['Authorization'] = 'Bearer ' + token;
+            config.headers['X-Auth-Token'] = 'super-admin-secret';
         }
     }
-    return originalFetch(resource, config);
+
+    const response = await originalFetch(resource, config);
+
+    // Auto-logout on 401 (expired or invalidated token) — but not on the login endpoint itself
+    if (response.status === 401 && !isAuthEndpoint && sessionStorage.getItem('seller_auth') === 'true') {
+        sessionStorage.removeItem('seller_auth');
+        sessionStorage.removeItem('seller_token');
+        sessionStorage.removeItem('employee_role');
+        sessionStorage.removeItem('employee_name');
+        sessionStorage.removeItem('employee_email');
+        window.location.reload();
+    }
+
+    return response;
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -156,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Authentication ---
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const email = document.getElementById('employee-email').value;
         const pwd = document.getElementById('seller-password').value;
         const btn = loginForm.querySelector('button');
 
@@ -163,23 +186,26 @@ document.addEventListener('DOMContentLoaded', () => {
         loginError.textContent = '';
 
         try {
-            const res = await fetch(`${API_BASE}/admin/seller-auth`, {
+            const res = await fetch(`${API_BASE}/admin/employee-login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: pwd })
+                body: JSON.stringify({ email, password: pwd })
             });
 
             if (res.ok) {
                 const data = await res.json();
                 sessionStorage.setItem('seller_auth', 'true');
-                if (data.token) sessionStorage.setItem('seller_token', data.token);
+                sessionStorage.setItem('seller_token', data.token);
+                sessionStorage.setItem('employee_role', data.role);
+                sessionStorage.setItem('employee_name', data.name);
+                sessionStorage.setItem('employee_email', data.email);
                 isAuthenticated = true;
                 loginForm.reset();
                 showView('dashboard');
                 initDashboard();
             } else {
                 const data = await res.json();
-                loginError.textContent = data.detail || 'Invalid password';
+                loginError.textContent = data.detail || 'Invalid credentials';
             }
         } catch (err) {
             loginError.textContent = 'Connection error. Is backend running?';
@@ -191,12 +217,35 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.addEventListener('click', () => {
         sessionStorage.removeItem('seller_auth');
         sessionStorage.removeItem('seller_token');
+        sessionStorage.removeItem('employee_role');
+        sessionStorage.removeItem('employee_name');
+        sessionStorage.removeItem('employee_email');
         isAuthenticated = false;
         showView('login');
     });
 
+    // --- Role-based UI visibility ---
+    function applyRoleVisibility() {
+        const role = sessionStorage.getItem('employee_role') || 'admin';
+        const name = sessionStorage.getItem('employee_name') || 'Admin';
+
+        const displayName = document.getElementById('employee-display-name');
+        const displayRole = document.getElementById('employee-display-role');
+        if (displayName) displayName.textContent = name;
+        if (displayRole) displayRole.textContent = role.replace(/_/g, ' ');
+
+        // Hide billing/plans tab for support and viewer
+        const plansBtn = document.querySelector('.nav-btn[data-target="tab-plans"]');
+        if (plansBtn) plansBtn.style.display = (['support', 'viewer'].includes(role)) ? 'none' : '';
+
+        // Show team tab only for super_admin
+        const teamBtn = document.getElementById('team-tab-btn');
+        if (teamBtn) teamBtn.style.display = (role === 'super_admin') ? '' : 'none';
+    }
+
     // --- Navigation & Tenant Selection ---
     async function initDashboard() {
+        applyRoleVisibility();
         await loadAllTenants();
         await loadPlans();
         // Load whatever tab is active
@@ -245,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(btn.dataset.target).classList.add('active');
 
             // Show global settings if returning to global tabs
-            if (['tab-register', 'tab-clients', 'tab-plans', 'tab-incidents'].includes(btn.dataset.target)) {
+            if (['tab-register', 'tab-clients', 'tab-plans', 'tab-incidents', 'tab-team'].includes(btn.dataset.target)) {
                 const regBtn = document.querySelector('.nav-btn[data-target="tab-register"]');
                 if (regBtn) regBtn.style.display = 'block';
                 const configMenu = document.getElementById('client-configs-menu');
@@ -262,6 +311,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btn.dataset.target === 'tab-incidents') {
                 loadAdminIncidents();
             }
+            if (btn.dataset.target === 'tab-team') {
+                loadEmployees();
+            }
             // handleTabSwitch handles all data loading for tenant-specific tabs
             handleTabSwitch(btn.dataset.target);
         });
@@ -276,6 +328,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (tabId === 'tab-plans') {
+            return;
+        }
+        if (tabId === 'tab-incidents') {
+            return;
+        }
+        if (tabId === 'tab-team') {
             return;
         }
 
@@ -509,11 +567,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><a href="${CLIENT_ADMIN_URL}?username=${t.username || t.id}" target="_blank" class="btn outline-btn" style="padding:0.3rem 0.6rem; font-size:0.75rem; text-decoration:none;">Admin</a></td>
                 <td>
                     <div style="display: flex; gap: 5px;">
-                        ${t.is_active ?
+                        ${sessionStorage.getItem('employee_role') !== 'viewer' ? (t.is_active ?
                             `<button class="btn danger-btn" style="padding:0.3rem 0.5rem; font-size:0.75rem;" onclick="deactivateTenant('${t.id}')">Deactivate</button>` :
                             `<button class="btn" style="padding:0.3rem 0.5rem; font-size:0.75rem; background-color:#ff4444; color:white;" onclick="deleteTenantHard('${t.id}')">Delete</button>`
-                        }
-                        <button class="btn primary-btn" style="padding:0.3rem 0.5rem; font-size:0.75rem;" onclick="extendSubscription('${t.id}')">+30 Days</button>
+                        ) : ''}
+                        ${sessionStorage.getItem('employee_role') !== 'viewer' ? `<button class="btn primary-btn" style="padding:0.3rem 0.5rem; font-size:0.75rem;" onclick="extendSubscription('${t.id}')">+30 Days</button>` : ''}
                     </div>
                 </td>
                 <td>
@@ -1439,5 +1497,162 @@ document.addEventListener('DOMContentLoaded', () => {
     function escapeHTML(str) {
         if (!str) return '';
         return String(str).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+    }
+
+    // ── Team Tab ─────────────────────────────────────────────────────────────
+
+    let _globalEmployees = [];
+
+    async function loadEmployees() {
+        const noEmp = document.getElementById('no-employees');
+        try {
+            const res = await fetch(`${API_BASE}/admin/employees`);
+            if (res.ok) {
+                _globalEmployees = await res.json();
+                renderEmployeesTable();
+            } else {
+                if (noEmp) noEmp.style.display = 'block';
+            }
+        } catch (err) {
+            if (noEmp) noEmp.style.display = 'block';
+        }
+    }
+
+    function renderEmployeesTable() {
+        const tbody = document.getElementById('employees-list');
+        const noEmp = document.getElementById('no-employees');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (_globalEmployees.length === 0) {
+            if (noEmp) noEmp.style.display = 'block';
+            return;
+        }
+        if (noEmp) noEmp.style.display = 'none';
+
+        const roleColors = { super_admin: '#dc2626', admin: '#0078d4', support: '#107c41', viewer: '#888' };
+
+        _globalEmployees.forEach(emp => {
+            const color = roleColors[emp.role] || '#888';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${escapeHTML(emp.name)}</strong></td>
+                <td><small>${escapeHTML(emp.email)}</small></td>
+                <td><span style="background:${color}22;color:${color};border:1px solid ${color}44;border-radius:4px;padding:2px 8px;font-size:0.75rem;font-weight:600;">${emp.role.replace(/_/g, ' ')}</span></td>
+                <td><span style="color:${emp.is_active ? 'var(--success-color)' : 'var(--danger-color)'};">${emp.is_active ? 'Active' : 'Deactivated'}</span></td>
+                <td><small>${emp.created_at ? emp.created_at.substring(0, 10) : '—'}</small></td>
+                <td>
+                    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                        ${emp.is_active
+                            ? `<button class="btn danger-btn" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="deactivateEmployee('${emp.id}')">Deactivate</button>`
+                            : `<span style="color:var(--text-muted);font-size:0.8rem;">Deactivated</span>`}
+                        <button class="btn outline-btn" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openChangeRole('${emp.id}','${emp.role}')">Change Role</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Add Employee button
+    const addEmployeeBtn = document.getElementById('add-employee-btn');
+    if (addEmployeeBtn) {
+        addEmployeeBtn.addEventListener('click', () => {
+            const modalEl = document.getElementById('addEmployeeModal');
+            if (modalEl && window.bootstrap) {
+                document.getElementById('add-employee-form').reset();
+                document.getElementById('emp-form-error').textContent = '';
+                new bootstrap.Modal(modalEl).show();
+            }
+        });
+    }
+
+    // Save new employee
+    const empSaveBtn = document.getElementById('emp-save-btn');
+    if (empSaveBtn) {
+        empSaveBtn.addEventListener('click', async () => {
+            const name = document.getElementById('emp-name').value.trim();
+            const email = document.getElementById('emp-email').value.trim();
+            const password = document.getElementById('emp-password').value;
+            const role = document.getElementById('emp-role').value;
+            const errEl = document.getElementById('emp-form-error');
+            errEl.textContent = '';
+
+            if (!name || !email || !password) {
+                errEl.textContent = 'All fields are required.';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/employees`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password, role })
+                });
+                if (res.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('addEmployeeModal')).hide();
+                    showSuccessToast('Employee added successfully.');
+                    await loadEmployees();
+                } else {
+                    const data = await res.json();
+                    errEl.textContent = data.detail || 'Failed to add employee.';
+                }
+            } catch (err) {
+                errEl.textContent = 'Connection error.';
+            }
+        });
+    }
+
+    // Deactivate employee
+    window.deactivateEmployee = (id) => {
+        showConfirmModal('Deactivate this employee? They will no longer be able to log in.', async () => {
+            try {
+                const res = await fetch(`${API_BASE}/admin/employees/${id}/deactivate`, { method: 'PATCH' });
+                if (res.ok) {
+                    showSuccessToast('Employee deactivated.');
+                    await loadEmployees();
+                } else alert('Failed to deactivate employee.');
+            } catch (err) { alert('Connection error.'); }
+        });
+    };
+
+    // Open change-role modal
+    window.openChangeRole = (id, currentRole) => {
+        const roleSelect = document.getElementById('change-role-select');
+        const hiddenId = document.getElementById('change-role-emp-id');
+        const errEl = document.getElementById('change-role-error');
+        if (roleSelect) roleSelect.value = currentRole;
+        if (hiddenId) hiddenId.value = id;
+        if (errEl) errEl.textContent = '';
+        const modalEl = document.getElementById('changeRoleModal');
+        if (modalEl && window.bootstrap) new bootstrap.Modal(modalEl).show();
+    };
+
+    // Save role change
+    const changeRoleSaveBtn = document.getElementById('change-role-save-btn');
+    if (changeRoleSaveBtn) {
+        changeRoleSaveBtn.addEventListener('click', async () => {
+            const id = document.getElementById('change-role-emp-id').value;
+            const role = document.getElementById('change-role-select').value;
+            const errEl = document.getElementById('change-role-error');
+            errEl.textContent = '';
+            try {
+                const res = await fetch(`${API_BASE}/admin/employees/${id}/role`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role })
+                });
+                if (res.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('changeRoleModal')).hide();
+                    showSuccessToast('Employee role updated.');
+                    await loadEmployees();
+                } else {
+                    const data = await res.json();
+                    errEl.textContent = data.detail || 'Failed to update role.';
+                }
+            } catch (err) {
+                errEl.textContent = 'Connection error.';
+            }
+        });
     }
 });

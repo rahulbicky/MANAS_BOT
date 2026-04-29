@@ -36,6 +36,7 @@ from .api.routers.documents import router as documents_router
 from .api.routers.profile import router as profile_router
 from .api.routers.metrics import router as metrics_router
 from .api.routers.incidents import router as incidents_router
+from .api.routers.employees import router as employees_router
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 from .scheduler import start_scheduler, stop_scheduler
@@ -178,3 +179,4 @@ app.include_router(documents_router)
 app.include_router(profile_router)
 app.include_router(metrics_router)
 app.include_router(incidents_router)
+app.include_router(employees_router)

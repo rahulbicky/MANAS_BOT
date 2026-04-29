@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from dotenv import load_dotenv
 
 from ....database import (
@@ -29,6 +29,7 @@ from ....database import (
     reopen_incident,
 )
 from ...schemas.models import IncidentCreate, IncidentUpdate, IncidentResponse
+from ...core.security import require_role
 
 load_dotenv()
 
@@ -230,16 +231,12 @@ async def reopen_incident_endpoint(
 # ─────────────────────────────────────────────────────────────────────────────
 # GET /admin/all-incidents  — seller gets all
 # ─────────────────────────────────────────────────────────────────────────────
-@router.get("/all-incidents", response_model=List[IncidentResponse])
+@router.get("/all-incidents", response_model=List[IncidentResponse], dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
 async def get_all_incidents_endpoint(
-    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
     status: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
 ):
-    """Seller fetches all incidents from all clients with optional filters."""
-    if x_auth_token != "super-admin-secret":
-        raise HTTPException(status_code=403, detail="Seller access only.")
-
+    """Employee fetches all incidents from all clients with optional filters."""
     incidents = get_all_incidents()
 
     if status:
@@ -253,17 +250,13 @@ async def get_all_incidents_endpoint(
 # ─────────────────────────────────────────────────────────────────────────────
 # PUT /admin/incidents/{id}  — seller updates
 # ─────────────────────────────────────────────────────────────────────────────
-@router.put("/incidents/{incident_id}", response_model=IncidentResponse)
+@router.put("/incidents/{incident_id}", response_model=IncidentResponse, dependencies=[Depends(require_role("super_admin", "admin", "support"))])
 async def update_incident_endpoint(
     incident_id: str,
     payload: IncidentUpdate,
     background_tasks: BackgroundTasks,
-    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
 ):
-    """Seller updates incident status and/or writes a response."""
-    if x_auth_token != "super-admin-secret":
-        raise HTTPException(status_code=403, detail="Seller access only.")
-
+    """Employee updates incident status and/or writes a response."""
     updated = update_incident(incident_id, payload.dict(exclude_none=True))
     if not updated:
         raise HTTPException(status_code=404, detail="Incident not found.")
@@ -281,15 +274,11 @@ async def update_incident_endpoint(
 # ─────────────────────────────────────────────────────────────────────────────
 # DELETE /admin/incidents/{id}  — seller deletes
 # ─────────────────────────────────────────────────────────────────────────────
-@router.delete("/incidents/{incident_id}")
+@router.delete("/incidents/{incident_id}", dependencies=[Depends(require_role("super_admin", "admin"))])
 async def delete_incident_endpoint(
     incident_id: str,
-    x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
 ):
-    """Seller permanently deletes an incident."""
-    if x_auth_token != "super-admin-secret":
-        raise HTTPException(status_code=403, detail="Seller access only.")
-
+    """Employee permanently deletes an incident."""
     success = delete_incident(incident_id)
     if not success:
         raise HTTPException(status_code=404, detail="Incident not found.")

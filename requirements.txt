@@ -19,3 +19,4 @@ python-docx
 httpx
 beautifulsoup4
 apscheduler
+PyJWT

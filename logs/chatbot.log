@@ -853,3 +853,23 @@ FROM tenants LEFT OUTER JOIN plans AS plans_1 ON plans_1.id = tenants.current_pl
 2026-04-20 18:18:59 | INFO     | [REQUEST] tenant=-  GET /redoc  →  200  (0.5 ms)
 2026-04-20 18:19:01 | INFO     | [REQUEST] tenant=-  GET /openapi.json  →  200  (810.7 ms)
 2026-04-20 18:20:49 | INFO     | [Startup] Central schema migration complete.
+2026-04-29 17:49:45 | INFO     | [Startup] Central DB tables ready.
+2026-04-29 17:53:41 | INFO     | [Startup] Central schema migration complete.
+2026-04-29 18:03:10 | INFO     | [Startup] Central DB tables ready.
+2026-04-29 18:07:17 | INFO     | [Startup] Central schema migration complete.
+2026-04-29 18:11:43 | INFO     | [Startup] Central DB tables ready.
+2026-04-29 18:12:07 | INFO     | [REQUEST] tenant=-  POST /admin/employee-login  →  200  (3641.9 ms)
+2026-04-29 18:12:24 | INFO     | [REQUEST] tenant=-  GET /admin/employees  →  200  (2664.0 ms)
+2026-04-29 18:12:27 | INFO     | [REQUEST] tenant=-  GET /admin/plans  →  200  (2993.7 ms)
+2026-04-29 18:12:33 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (2667.8 ms)
+2026-04-29 18:15:12 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (5627.9 ms)
+2026-04-29 18:15:15 | INFO     | [REQUEST] tenant=-  GET /admin/employees  →  200  (2576.8 ms)
+2026-04-29 18:15:46 | INFO     | [Startup] Central schema migration complete.
+2026-04-29 18:16:02 | INFO     | [REQUEST] tenant=-  POST /admin/employees  →  200  (5143.4 ms)
+2026-04-29 18:16:05 | INFO     | [REQUEST] tenant=-  GET /admin/employees  →  200  (2663.3 ms)
+2026-04-29 18:16:40 | INFO     | [REQUEST] tenant=-  POST /admin/employee-login  →  200  (1851.4 ms)
+2026-04-29 18:16:56 | INFO     | [REQUEST] tenant=-  GET /admin/plans  →  200  (2918.6 ms)
+2026-04-29 18:16:59 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (2652.3 ms)
+2026-04-29 18:17:02 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (2560.1 ms)
+2026-04-29 18:30:27 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (3910.7 ms)
+2026-04-29 18:30:44 | INFO     | [REQUEST] tenant=-  GET /admin/employees  →  200  (2621.8 ms)

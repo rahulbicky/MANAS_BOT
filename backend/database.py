@@ -101,6 +101,18 @@ class Admin(Base):
     role = Column(String, default="admin")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class Employee(Base):
+    __tablename__ = "employees"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # super_admin | admin | support | viewer
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    # Tracks when role last changed — tokens issued before this timestamp are invalidated
+    role_changed_at = Column(DateTime, nullable=True)
+
 class Invoice(Base):
     __tablename__ = "invoices"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -855,6 +867,138 @@ def get_all_invoices_from_dbs() -> list:
 
 
 # ──────────────────────────────────────────────
+# EMPLOYEE MANAGEMENT
+# Internal staff accounts — separate from client (tenant) accounts.
+# Roles: super_admin | admin | support | viewer
+# ──────────────────────────────────────────────
+
+VALID_EMPLOYEE_ROLES = {"super_admin", "admin", "support", "viewer"}
+
+# To seed the first super_admin, run this SQL directly in your database
+# after generating a bcrypt hash (python -c "import bcrypt; print(bcrypt.hashpw(b'yourpass', bcrypt.gensalt()).decode())"):
+#
+#   INSERT INTO employees (id, name, email, password_hash, role, is_active, created_at)
+#   VALUES (
+#       gen_random_uuid()::text,
+#       'Super Admin',
+#       'admin@yourcompany.com',
+#       '$2b$12$<paste_bcrypt_hash_here>',
+#       'super_admin',
+#       TRUE,
+#       NOW()
+#   );
+
+
+def _employee_to_dict(employee: Employee, include_hash: bool = False) -> dict:
+    d = {
+        "id": employee.id,
+        "name": employee.name,
+        "email": employee.email,
+        "role": employee.role,
+        "is_active": employee.is_active,
+        "created_at": str(employee.created_at),
+        "role_changed_at": str(employee.role_changed_at) if employee.role_changed_at else None,
+    }
+    if include_hash:
+        d["password_hash"] = employee.password_hash
+    return d
+
+
+def create_employee(name: str, email: str, plain_password: str, role: str) -> dict:
+    if role not in VALID_EMPLOYEE_ROLES:
+        raise ValueError(f"Invalid role '{role}'. Must be one of: {', '.join(sorted(VALID_EMPLOYEE_ROLES))}")
+    session = _get_central_session()
+    try:
+        if session.query(Employee).filter(Employee.email == email).first():
+            raise ValueError(f"Employee with email '{email}' already exists.")
+        password_hash = bcrypt.hashpw(plain_password.encode(), bcrypt.gensalt()).decode()
+        employee = Employee(
+            id=str(uuid.uuid4()),
+            name=name,
+            email=email,
+            password_hash=password_hash,
+            role=role,
+        )
+        session.add(employee)
+        session.commit()
+        session.refresh(employee)
+        return _employee_to_dict(employee)
+    finally:
+        session.close()
+
+
+def get_employee_by_email(email: str) -> Optional[dict]:
+    """Returns employee dict including password_hash (needed for login verification)."""
+    session = _get_central_session()
+    try:
+        employee = session.query(Employee).filter(Employee.email == email).first()
+        if not employee:
+            return None
+        return _employee_to_dict(employee, include_hash=True)
+    finally:
+        session.close()
+
+
+def get_employee_by_id(employee_id: str) -> Optional[dict]:
+    """Returns employee dict without password_hash (used by auth middleware)."""
+    session = _get_central_session()
+    try:
+        employee = session.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee:
+            return None
+        return _employee_to_dict(employee)
+    finally:
+        session.close()
+
+
+def verify_employee_password(employee: dict, plain_password: str) -> bool:
+    stored_hash = employee.get("password_hash", "")
+    if not stored_hash:
+        return False
+    return bcrypt.checkpw(plain_password.encode(), stored_hash.encode())
+
+
+def list_employees() -> list:
+    session = _get_central_session()
+    try:
+        employees = session.query(Employee).order_by(Employee.created_at.asc()).all()
+        return [_employee_to_dict(e) for e in employees]
+    finally:
+        session.close()
+
+
+def deactivate_employee(employee_id: str) -> Optional[dict]:
+    session = _get_central_session()
+    try:
+        employee = session.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee:
+            return None
+        employee.is_active = False
+        session.commit()
+        session.refresh(employee)
+        return _employee_to_dict(employee)
+    finally:
+        session.close()
+
+
+def update_employee_role(employee_id: str, new_role: str) -> Optional[dict]:
+    if new_role not in VALID_EMPLOYEE_ROLES:
+        raise ValueError(f"Invalid role '{new_role}'. Must be one of: {', '.join(sorted(VALID_EMPLOYEE_ROLES))}")
+    session = _get_central_session()
+    try:
+        employee = session.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee:
+            return None
+        employee.role = new_role
+        employee.role_changed_at = datetime.datetime.utcnow()
+        session.commit()
+        session.refresh(employee)
+        return _employee_to_dict(employee)
+    finally:
+        session.close()
+
+
+# ──────────────────────────────────────────────
 # SCHEMA MIGRATIONS
 # ──────────────────────────────────────────────
 
@@ -948,6 +1092,8 @@ def migrate_central_schema():
         ("leads", "page_url", "VARCHAR DEFAULT ''"),
         ("leads", "is_notified", "BOOLEAN DEFAULT FALSE"),
         ("leads", "created_at", "TIMESTAMP"),
+        # employees: role invalidation timestamp
+        ("employees", "role_changed_at", "TIMESTAMP"),
     ]
 
     for table_name, column_name, column_sql in migration_steps:

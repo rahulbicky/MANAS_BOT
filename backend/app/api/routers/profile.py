@@ -13,11 +13,12 @@ from sqlalchemy.orm import Session
 from ..deps import get_tenant_db
 from ....database import BusinessProfile
 from ...schemas.models import BusinessProfileBase
+from ...core.security import require_role
 
 router = APIRouter(prefix="/admin", tags=["Profile"])
 
 
-@router.get("/profile", response_model=BusinessProfileBase)
+@router.get("/profile", response_model=BusinessProfileBase, dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
 async def get_profile(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     profile = db.query(BusinessProfile).filter(BusinessProfile.tenant_id == tenant_id).first()
     if not profile:
@@ -28,7 +29,7 @@ async def get_profile(tenant_id: str = Query(...), db: Session = Depends(get_ten
     return profile
 
 
-@router.post("/profile", response_model=BusinessProfileBase)
+@router.post("/profile", response_model=BusinessProfileBase, dependencies=[Depends(require_role("super_admin", "admin"))])
 async def update_profile(
     profile_data: BusinessProfileBase,
     tenant_id: str = Query(...),
