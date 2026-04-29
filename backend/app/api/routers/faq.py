@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from ..deps import get_tenant_db
 from ....database import FAQ, get_tenant_limits
 from ...schemas.models import FAQBase, FAQResponse
+from ...core.security import require_role
 
 router = APIRouter(prefix="/admin", tags=["FAQ"])
 
@@ -27,7 +28,7 @@ def _get_tenant_lock(tenant_id: str) -> threading.Lock:
     return _tenant_locks[tenant_id]
 
 
-@router.post("/faq", response_model=FAQResponse)
+@router.post("/faq", response_model=FAQResponse, dependencies=[Depends(require_role("super_admin", "admin", "support"))])
 def create_faq(
     faq: FAQBase,
     tenant_id: str = Query(...),
@@ -49,12 +50,12 @@ def create_faq(
         return new_faq
 
 
-@router.get("/faqs", response_model=List[FAQResponse])
+@router.get("/faqs", response_model=List[FAQResponse], dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
 async def get_faqs(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     return db.query(FAQ).filter(FAQ.tenant_id == tenant_id).all()
 
 
-@router.delete("/faq/{faq_id}")
+@router.delete("/faq/{faq_id}", dependencies=[Depends(require_role("super_admin", "admin", "support"))])
 async def deactivate_faq(faq_id: str, tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     faq = db.query(FAQ).filter(FAQ.id == faq_id, FAQ.tenant_id == tenant_id).first()
     if not faq:

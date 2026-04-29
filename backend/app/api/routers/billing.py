@@ -13,8 +13,9 @@ Routes:
 """
 from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
+from ...core.security import require_role
 from ...schemas.models import (
     ExtendSubscriptionRequest,
     ChargeClientRequest,
@@ -26,7 +27,7 @@ from ...schemas.models import (
 router = APIRouter(prefix="/admin", tags=["Billing"])
 
 
-@router.post("/tenant/{tenant_id}/extend-subscription")
+@router.post("/tenant/{tenant_id}/extend-subscription", dependencies=[Depends(require_role("super_admin", "admin"))])
 async def extend_subscription_endpoint(tenant_id: str, payload: ExtendSubscriptionRequest):
     """Extend a client's subscription by a given number of days."""
     from ....database import extend_subscription
@@ -36,7 +37,7 @@ async def extend_subscription_endpoint(tenant_id: str, payload: ExtendSubscripti
     raise HTTPException(status_code=404, detail="Tenant not found.")
 
 
-@router.post("/charge-client")
+@router.post("/charge-client", dependencies=[Depends(require_role("super_admin", "admin"))])
 async def charge_client_endpoint(payload: ChargeClientRequest, background_tasks: BackgroundTasks):
     """Record a payment and extend subscription by 30 days."""
     from ....database import record_payment, get_tenant_by_id
@@ -64,21 +65,21 @@ async def charge_client_endpoint(payload: ChargeClientRequest, background_tasks:
         raise HTTPException(status_code=500, detail=f"Payment failed: {e}")
 
 
-@router.get("/invoices", response_model=List[InvoiceResponse])
+@router.get("/invoices", response_model=List[InvoiceResponse], dependencies=[Depends(require_role("super_admin", "admin"))])
 async def list_invoices():
     """List all global payment historical records."""
     from ....database import get_all_invoices_from_dbs
     return get_all_invoices_from_dbs()
 
 
-@router.get("/plans", response_model=List[PlanResponse])
+@router.get("/plans", response_model=List[PlanResponse], dependencies=[Depends(require_role("super_admin", "admin"))])
 async def list_plans():
     """List all subscription plans."""
     from ....database import get_all_plans
     return get_all_plans()
 
 
-@router.post("/plans", response_model=PlanResponse)
+@router.post("/plans", response_model=PlanResponse, dependencies=[Depends(require_role("super_admin", "admin"))])
 async def create_new_plan(payload: PlanRequest):
     """Create a new subscription plan."""
     from ....database import create_plan
@@ -88,7 +89,7 @@ async def create_new_plan(payload: PlanRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.put("/plans/{plan_id}", response_model=PlanResponse)
+@router.put("/plans/{plan_id}", response_model=PlanResponse, dependencies=[Depends(require_role("super_admin", "admin"))])
 async def update_existing_plan(plan_id: str, payload: PlanRequest):
     """Update an existing subscription plan."""
     from ....database import update_plan
@@ -98,7 +99,7 @@ async def update_existing_plan(plan_id: str, payload: PlanRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/plans/{plan_id}")
+@router.delete("/plans/{plan_id}", dependencies=[Depends(require_role("super_admin", "admin"))])
 async def delete_existing_plan(plan_id: str):
     """Delete a subscription plan."""
     from ....database import delete_plan
@@ -111,7 +112,7 @@ async def delete_existing_plan(plan_id: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/tenant/{tenant_id}/send-expiry-reminder")
+@router.post("/tenant/{tenant_id}/send-expiry-reminder", dependencies=[Depends(require_role("super_admin", "admin"))])
 async def send_expiry_reminder_endpoint(tenant_id: str, background_tasks: BackgroundTasks):
     """Send subscription expiry reminder email to client."""
     from ....database import get_tenant_by_id
