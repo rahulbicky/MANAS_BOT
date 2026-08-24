@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="frontend/admin/neuaitechnologies_logo.jpg" alt="ManasBot Logo" width="120" />
-</p>
 
 <h1 align="center">🤖 MANAS BOT</h1>
 
