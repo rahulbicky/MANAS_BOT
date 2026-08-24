@@ -529,14 +529,4 @@ python -m pytest -v
 
 Please follow the existing code style and include tests for new features.
 
----
 
-## License
-
-This project is proprietary software developed by **NEU AI Technologies**.
-
----
-
-<p align="center">
-  Built with ❤️ by the ManasBot Team
-</p>
