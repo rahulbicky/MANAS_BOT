@@ -38,8 +38,9 @@ def detect_intent(question: str, tenant_id: str = None, db=None) -> str:
         except Exception:
             pass  # Fallback to defaults if tenant DB not available
 
-    # Use llama-3.1-8b-instant for maximum speed
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    # llama-3.1-8b-instant was retired by Groq; openai/gpt-oss-20b is the current
+    # fast/cheap-tier equivalent available on this account.
+    llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
 
     system_prompt = (
         f"You are an intent detection bot for {company}, a business in the {industry} industry. "

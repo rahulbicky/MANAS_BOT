@@ -873,3 +873,27 @@ FROM tenants LEFT OUTER JOIN plans AS plans_1 ON plans_1.id = tenants.current_pl
 2026-04-29 18:17:02 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (2560.1 ms)
 2026-04-29 18:30:27 | INFO     | [REQUEST] tenant=-  GET /admin/all-incidents  →  200  (3910.7 ms)
 2026-04-29 18:30:44 | INFO     | [REQUEST] tenant=-  GET /admin/employees  →  200  (2621.8 ms)
+2026-09-19 11:23:38 | INFO     | [Startup] Central DB tables ready.
+2026-09-19 11:23:47 | INFO     | [REQUEST] tenant=-  GET /docs  →  200  (0.2 ms)
+2026-09-19 11:23:47 | INFO     | [REQUEST] tenant=-  GET /openapi.json  →  200  (93.5 ms)
+2026-09-19 11:23:51 | INFO     | [REQUEST] tenant=-  GET /openapi.json  →  200  (0.6 ms)
+2026-09-19 11:24:22 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  GET /admin/tenant-info  →  200  (4321.6 ms)
+2026-09-19 11:24:25 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  GET /admin/profile  →  200  (2539.6 ms)
+2026-09-19 11:24:31 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  POST /admin/faq  →  200  (5576.8 ms)
+2026-09-19 11:24:31 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  GET /admin/tenant-info  →  401  (0.4 ms)
+2026-09-19 11:24:38 | INFO     | [REQUEST] tenant=-  POST /chat  →  500  (2104.7 ms)
+2026-09-19 11:25:57 | INFO     | [Startup] Central DB tables ready.
+2026-09-19 11:26:14 | INFO     | [REQUEST] tenant=-  POST /chat  →  200  (11740.1 ms)
+2026-09-19 11:26:58 | INFO     | [REQUEST] tenant=-  POST /chat  →  200  (8238.0 ms)
+2026-09-19 11:27:13 | INFO     | [REQUEST] tenant=-  POST /chat  →  200  (6687.0 ms)
+2026-09-19 11:27:38 | INFO     | [REQUEST] tenant=-  POST /admin/employee-login  →  200  (1335.2 ms)
+2026-09-19 11:27:54 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  GET /admin/tenant-info  →  200  (3091.5 ms)
+2026-09-19 11:27:55 | INFO     | [REQUEST] tenant=-  GET /admin/employees  →  403  (1181.7 ms)
+2026-09-19 11:28:04 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  GET /admin/tenant-info  →  401  (0.5 ms)
+2026-09-19 11:28:04 | INFO     | [REQUEST] tenant=51fe985e-d02c-4972-b6bd-ef6135e5a043  POST /admin/faq  →  401  (1.9 ms)
+2026-09-19 11:29:35 | INFO     | [Startup] Central schema migration complete.
+2026-09-19 11:35:15 | INFO     | [REQUEST] tenant=76f7dbf5-7cc7-4b59-b856-a8f68488aaa9  POST /admin/faq  →  401  (0.9 ms)
+2026-09-19 11:35:21 | INFO     | [REQUEST] tenant=-  POST /chat  →  200  (5350.8 ms)
+2026-09-19 11:35:21 | INFO     | [REQUEST] tenant=76f7dbf5-7cc7-4b59-b856-a8f68488aaa9  GET /admin/tenant-info  →  401  (0.7 ms)
+2026-09-19 11:41:36 | INFO     | [Startup] Central DB tables ready.
+2026-09-19 11:45:15 | INFO     | [Startup] Central schema migration complete.

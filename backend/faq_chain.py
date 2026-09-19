@@ -96,8 +96,9 @@ def get_answer(question: str, intent: str, tenant_id: str, language: str = "en",
         }
         lang_name = lang_map.get(language, "English")
 
-        # Use llama-3.1-8b-instant for much faster response times
-        llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.5)
+        # llama-3.1-8b-instant was retired by Groq; openai/gpt-oss-20b is the current
+        # fast/cheap-tier equivalent available on this account.
+        llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0.5)
 
         # Reuse the existing session for context fetching
         context = get_faq_context(intent, tenant_id, db=db)

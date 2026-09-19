@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 venv/
+manasbot/
 .streamlit/
 tenants.json
 security_tests/
+logs/

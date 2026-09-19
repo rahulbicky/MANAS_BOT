@@ -211,8 +211,7 @@ ManasBot/
 │   ├── admin/                   # Super Admin / Admin dashboard
 │   │   ├── index.html
 │   │   ├── script.js
-│   │   ├── style.css
-│   │   └── neuaitechnologies_logo.jpg
+│   │   └── style.css
 │   ├── client/                  # Client (tenant) management panel
 │   │   ├── index.html
 │   │   ├── script.js
@@ -229,7 +228,7 @@ ManasBot/
 ├── clean_dbs.py                 # Cleanup script for test databases
 ├── requirements.txt             # Python dependencies
 ├── Dockerfile                   # Production container image
-├── .env.example                 # Environment variable template
+├── .env                          # Local environment variables (never commit)
 ├── .gitignore
 ├── test_employees.py            # Employee management tests
 ├── test_endpoints.py            # API endpoint tests
@@ -269,11 +268,13 @@ pip install -r requirements.txt
 
 ### Environment Variables
 
-Copy the example environment file and fill in your values:
+Create a local `.env` file in the project root and fill in your values. The file is ignored by Git so secrets stay local:
 
 ```bash
-cp .env.example .env
+touch .env
 ```
+
+On Windows PowerShell, use `New-Item .env` instead.
 
 Edit `.env` with your configuration:
 
@@ -331,6 +332,10 @@ The server will print:
 
 [Backend] Starting FastAPI backend on http://127.0.0.1:8000 ...
 ```
+
+Once the server is running, open `http://127.0.0.1:8080/admin/`,
+`http://127.0.0.1:8080/client/`, or `http://127.0.0.1:8080/chatbot/` in a browser.
+The FastAPI Swagger UI is available at `http://127.0.0.1:8000/docs`.
 
 ---
 
@@ -491,17 +496,16 @@ gcloud run deploy manasbot \
 
 ```bash
 # Run employee management tests
-python -m pytest test_employees.py -v
+python test_employees.py
 
 # Run API endpoint tests
-python -m pytest test_endpoints.py -v
+python test_endpoints.py
 
 # Run rate limit / plan limit tests
-python -m pytest test_limits.py -v
-
-# Run all tests
-python -m pytest -v
+python test_limits.py
 ```
+
+The endpoint test requires the backend to be running on port `8000`.
 
 ---
 

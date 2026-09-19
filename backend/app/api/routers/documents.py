@@ -27,7 +27,7 @@ from ..deps import get_tenant_db
 from ....database import KnowledgeDocument, get_tenant_limits
 from ...schemas.models import DocumentResponse
 from ...utils.formatters import format_utc
-from ...core.security import require_role
+from ...core.security import require_tenant_or_role
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def _parse_file(filename: str, content_bytes: bytes) -> str:
         raise HTTPException(status_code=400, detail=f"Unsupported file format: {filename}")
 
 
-@router.post("/upload-doc", response_model=DocumentResponse, dependencies=[Depends(require_role("super_admin", "admin"))])
+@router.post("/upload-doc", response_model=DocumentResponse, dependencies=[Depends(require_tenant_or_role("super_admin", "admin"))])
 async def upload_document(
     tenant_id: str = Query(...),
     file: UploadFile = File(...),
@@ -140,7 +140,7 @@ async def upload_document(
     }
 
 
-@router.post("/add-url", response_model=DocumentResponse, dependencies=[Depends(require_role("super_admin", "admin"))])
+@router.post("/add-url", response_model=DocumentResponse, dependencies=[Depends(require_tenant_or_role("super_admin", "admin"))])
 async def add_url_document(
     tenant_id: str = Query(...),
     payload: AddUrlRequest = ...,
@@ -199,7 +199,7 @@ async def add_url_document(
     }
 
 
-@router.post("/refresh-urls", dependencies=[Depends(require_role("super_admin", "admin"))])
+@router.post("/refresh-urls", dependencies=[Depends(require_tenant_or_role("super_admin", "admin"))])
 async def refresh_url_documents(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     url_docs = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.tenant_id == tenant_id,
@@ -223,7 +223,7 @@ async def refresh_url_documents(tenant_id: str = Query(...), db: Session = Depen
     return {"refreshed": refreshed, "failed": failed}
 
 
-@router.get("/docs", response_model=List[DocumentResponse], dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
+@router.get("/docs", response_model=List[DocumentResponse], dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support", "viewer"))])
 async def get_documents(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     docs = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.tenant_id == tenant_id, KnowledgeDocument.is_active == True
@@ -238,7 +238,7 @@ async def get_documents(tenant_id: str = Query(...), db: Session = Depends(get_t
     ]
 
 
-@router.delete("/doc/{doc_id}", dependencies=[Depends(require_role("super_admin", "admin"))])
+@router.delete("/doc/{doc_id}", dependencies=[Depends(require_tenant_or_role("super_admin", "admin"))])
 async def delete_document(doc_id: str, tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     doc = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.id == doc_id, KnowledgeDocument.tenant_id == tenant_id

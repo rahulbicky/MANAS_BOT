@@ -17,12 +17,12 @@ from ....database import Lead, ChatLog, ChatFeedback
 from ....encryption import decrypt_text
 from ...schemas.models import ChatLogResponse
 from ...utils.formatters import format_utc
-from ...core.security import require_role
+from ...core.security import require_tenant_or_role
 
 router = APIRouter(prefix="/admin", tags=["Leads"])
 
 
-@router.get("/leads", dependencies=[Depends(require_role("super_admin", "admin", "support"))])
+@router.get("/leads", dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support"))])
 async def get_leads(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     leads = db.query(Lead).filter(Lead.tenant_id == tenant_id).order_by(Lead.created_at.desc()).all()
     return [
@@ -41,7 +41,7 @@ async def get_leads(tenant_id: str = Query(...), db: Session = Depends(get_tenan
     ]
 
 
-@router.get("/chats", response_model=List[ChatLogResponse], dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
+@router.get("/chats", response_model=List[ChatLogResponse], dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support", "viewer"))])
 async def get_all_chats(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     logs = db.query(ChatLog).filter(ChatLog.tenant_id == tenant_id).all()
     feedbacks = db.query(ChatFeedback).filter(ChatFeedback.tenant_id == tenant_id).all()
@@ -83,7 +83,7 @@ async def get_all_chats(tenant_id: str = Query(...), db: Session = Depends(get_t
     return results
 
 
-@router.get("/feedback/stats", dependencies=[Depends(require_role("super_admin", "admin", "support", "viewer"))])
+@router.get("/feedback/stats", dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support", "viewer"))])
 async def get_feedback_stats(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
     feedbacks = db.query(ChatFeedback).filter(ChatFeedback.tenant_id == tenant_id).all()
     if not feedbacks:

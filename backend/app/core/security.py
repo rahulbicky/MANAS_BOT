@@ -91,6 +91,34 @@ def require_role(*allowed_roles: str):
     return _check
 
 
+def require_tenant_or_role(*allowed_roles: str):
+    """Dependency factory for routes shared by both auth systems:
+      - the tenant/client panel (X-Auth-Token = that tenant's own api_key) — full access
+        to their own data, no role check (it's their data).
+      - the employee/admin panel (Authorization: Bearer <jwt>) — access to any tenant's
+        data, gated by role as usual.
+
+    A request must satisfy ONE of the two, not both. This lets a client manage their own
+    FAQs/profile/documents/leads via their API key alone, while employees still need a
+    valid JWT with sufficient role (the "X-Auth-Token: super-admin-secret" bypass sent by
+    the admin panel is NOT sufficient on its own — it still requires the employee JWT).
+    """
+    async def _check(
+        request: Request,
+        tenant_id: str = Query(..., description="The tenant/client ID"),
+        x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
+    ) -> dict:
+        if x_auth_token and x_auth_token != "super-admin-secret":
+            tenant = get_tenant_by_id(tenant_id)
+            if tenant and tenant.get("api_key") == x_auth_token:
+                return {"auth_type": "tenant", "tenant_id": tenant_id}
+        employee = await get_employee_from_token(request)
+        if employee["role"] not in allowed_roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions.")
+        return employee
+    return _check
+
+
 def get_tenant_db(
     request: Request,
     tenant_id: str = Query(..., description="The tenant/client ID"),

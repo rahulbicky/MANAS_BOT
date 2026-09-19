@@ -146,7 +146,7 @@
                     </button>
                 </form>
             </div>
-            <div class="cb-footer">Powered by <a href="https://www.neuaitechnologies.com/" target="_blank" style="color: inherit; text-decoration: none; font-weight: 500;">NEUAI Technologies</a></div>
+            <div class="cb-footer">Powered by <span style="color: inherit; font-weight: 500;">MANAS BOT</span></div>
         </div>
     `;
     document.body.appendChild(container);

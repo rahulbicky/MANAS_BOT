@@ -23,7 +23,7 @@ from ....database import (
     create_demo_tenant,
 )
 from ...schemas.models import TenantCreate, TenantResponse
-from ...core.security import require_role
+from ...core.security import require_role, require_tenant_or_role
 
 router = APIRouter(prefix="/admin", tags=["Tenants"])
 
@@ -98,7 +98,7 @@ async def list_tenants(
     return filtered_tenants
 
 
-@router.get("/tenant-info", response_model=TenantResponse, dependencies=[Depends(require_role("super_admin", "admin", "support"))])
+@router.get("/tenant-info", response_model=TenantResponse, dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support"))])
 async def get_tenant_info(tenant_id: str):
     """Get info for a specific tenant (used by client dashboard)."""
     t = get_tenant_by_id(tenant_id)
