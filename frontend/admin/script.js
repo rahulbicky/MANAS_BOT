@@ -2,10 +2,14 @@ const API_BASE = (window.location.hostname === 'localhost' || window.location.ho
     ? 'http://127.0.0.1:8000'
     : 'https://manasbot.onrender.com';
 
-// Render Static Site URLs for the other two frontends.
-// IMPORTANT: Replace these with your actual Render static site URLs after deployment.
-const CLIENT_CHATBOT_URL = 'https://manasbot-chatbot-widget.onrender.com';
-const CLIENT_ADMIN_URL = 'https://manasbot-1.onrender.com';
+// Dynamic URLs — automatically point to local server in dev, Render in production
+const _isLocal = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const CLIENT_CHATBOT_URL = _isLocal
+    ? `${window.location.protocol}//${window.location.hostname}:${window.location.port}/chatbot/`
+    : 'https://manasbot-chatbot-widget.onrender.com';
+const CLIENT_ADMIN_URL = _isLocal
+    ? `${window.location.protocol}//${window.location.hostname}:${window.location.port}/client/`
+    : 'https://manasbot-1.onrender.com';
 
 // Global Fetch Interceptor — attaches auth headers to all /admin/ requests
 // New system: Authorization: Bearer <jwt> for employee-facing routes
@@ -167,6 +171,21 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     }
 
+    // Global helper — copy an input/textarea value to clipboard
+    window.copyToClipboard = function(elementId, btn) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const text = el.value || el.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = orig; }, 2000);
+        }).catch(() => {
+            el.select && el.select();
+            document.execCommand('copy');
+        });
+    };
+
     // Initialization
     if (isAuthenticated) {
         showView('dashboard');
@@ -266,6 +285,16 @@ document.addEventListener('DOMContentLoaded', () => {
             globalChatsData = [];
         }
         selectedTenantId = id;
+
+        // ── Populate chatbot embed code with this tenant's ID ──────────────────
+        const chatbotUrl = `${CLIENT_CHATBOT_URL}?tenant_id=${id}`;
+        const embedCode = `<script src="${API_BASE}/static/chatbot-embed.js" data-tenant-id="${id}"><\/script>`;
+        const urlInput = document.getElementById('chatbot-direct-url');
+        const embedInput = document.getElementById('chatbot-embed-code');
+        const openLink = document.getElementById('chatbot-open-link');
+        if (urlInput) urlInput.value = chatbotUrl;
+        if (embedInput) embedInput.value = embedCode;
+        if (openLink) openLink.href = chatbotUrl;
         // Update sidebar banner
         currentTenantInfo.textContent = t.name;
         currentClientBanner.style.display = 'block';

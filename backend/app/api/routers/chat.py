@@ -59,8 +59,13 @@ async def chat_endpoint(
         # ── 2. Open tenant DB session ──────────────────────────────────────
         try:
             db = get_tenant_session(payload.tenant_id)
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+        except ValueError:
+            # Return friendly message to the chat widget instead of raw 404
+            return ChatResponse(
+                answer="Sorry, this chatbot is not properly configured. Please contact support.",
+                intent="error_tenant_not_found",
+                resolved=False,
+            )
 
         # ── 3. Subscription expiry check ───────────────────────────────────
         current_tenant = get_tenant_by_id(payload.tenant_id)
@@ -276,36 +281,36 @@ async def chat_config_endpoint(
     """
     Public endpoint to fetch widget UI configuration (company name, logo, greeting).
     No authentication required as this is needed by the public facing widget.
+    Always returns 200 — widget must not break if tenant is missing or DB errors.
     """
     db = None
+    _default = {
+        "company_name": "MANAS BOT",
+        "logo_url": "",
+        "chatbot_greeting_message": "Hi! How can I help you today?",
+        "brand_color_primary": "",
+        "brand_color_secondary": ""
+    }
     try:
         db = get_tenant_session(tenant_id)
         from ....database import BusinessProfile
         profile = db.query(BusinessProfile).filter(BusinessProfile.tenant_id == tenant_id).first()
-        
+
         if profile:
             return {
-                "company_name": profile.company_name,
-                "logo_url": profile.logo_url,
-                "chatbot_greeting_message": profile.chatbot_greeting_message,
-                "brand_color_primary": profile.brand_color_primary,
-                "brand_color_secondary": profile.brand_color_secondary
+                "company_name": profile.company_name or _default["company_name"],
+                "logo_url": profile.logo_url or "",
+                "chatbot_greeting_message": profile.chatbot_greeting_message or _default["chatbot_greeting_message"],
+                "brand_color_primary": profile.brand_color_primary or "",
+                "brand_color_secondary": profile.brand_color_secondary or ""
             }
-        else:
-            return {
-                "company_name": "",
-                "logo_url": "",
-                "chatbot_greeting_message": "",
-                "brand_color_primary": "",
-                "brand_color_secondary": ""
-            }
-    except Exception as e:
-        if db:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-        raise HTTPException(status_code=500, detail=str(e))
+        return _default
+    except Exception:
+        # Always return 200 — widget must not get stuck on a blank "Loading..." screen
+        return _default
     finally:
         if db:
-            db.close()
+            try:
+                db.close()
+            except Exception:
+                pass

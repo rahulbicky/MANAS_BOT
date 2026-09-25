@@ -588,29 +588,35 @@ def register_tenant(name: str, db_url: str = "", admin_password: str = "admin", 
         session.refresh(new_tenant)
         _invalidate_tenant_cache()
 
-        # Populate initial logo if provided
-        if logo_b64:
-            central_session = _get_central_session()
-            try:
+        # ── Always create a BusinessProfile for this tenant (required for chatbot to work) ──
+        central_session = _get_central_session()
+        try:
+            existing_profile = central_session.query(BusinessProfile).filter(
+                BusinessProfile.tenant_id == new_tenant.id
+            ).first()
+            if not existing_profile:
                 profile = BusinessProfile(
                     id=str(uuid.uuid4()),
                     tenant_id=new_tenant.id,
                     company_name=name,
-                    industry="Technology",
-                    business_description="We provide innovative solutions.",
-                    logo_url=logo_b64
+                    industry="General Services",
+                    business_description=f"Welcome to {name}. We are committed to providing excellent service.",
+                    chatbot_greeting_message=f"Hi! Welcome to {name}. How can I help you today?",
+                    chatbot_system_prompt=f"You are a helpful customer support assistant for {name}. Always be polite and professional.",
+                    logo_url=logo_b64 or ""
                 )
                 central_session.add(profile)
                 central_session.commit()
-            except Exception as e:
-                central_session.rollback()
-                print(f"Failed to save initial logo: {e}")
-            finally:
-                central_session.close()
+        except Exception as e:
+            central_session.rollback()
+            print(f"[register_tenant] Failed to create BusinessProfile for {name}: {e}")
+        finally:
+            central_session.close()
 
         return _tenant_to_dict(new_tenant, plan_name=starter_plan.name)
     finally:
         session.close()
+
 
 def create_demo_tenant(name: str, db_url: str = "") -> dict:
     """Create a read-only demo tenant with prefilled data."""

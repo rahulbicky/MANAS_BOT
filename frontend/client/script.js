@@ -1,4 +1,6 @@
-const API_BASE = 'https://manasbot.onrender.com';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://manasbot.onrender.com';
 
 // Global Fetch Interceptor to attach X-Auth-Token automatically
 const originalFetch = window.fetch;

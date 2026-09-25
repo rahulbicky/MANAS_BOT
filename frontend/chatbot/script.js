@@ -1,10 +1,13 @@
 // Widget specific isolated JS
 (function () {
-    const API_BASE = 'https://manasbot.onrender.com';
+    const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://127.0.0.1:8000'
+        : 'https://manasbot.onrender.com';
 
-    // Get tenant ID from URL for testing, or use a default
+    // Get tenant ID from URL — must be passed as ?tenant_id=<id>
+    // For local testing use one of the real tenant IDs from the DB
     const urlParams = new URLSearchParams(window.location.search);
-    const tenantId = urlParams.get('tenant_id') || 'test_tenant';
+    const tenantId = urlParams.get('tenant_id') || 'e591484a-b724-4b84-8255-7e4e7ed6328b';
 
     // Generate a simple session ID
     if (!sessionStorage.getItem('cb_session_id')) {
@@ -30,7 +33,7 @@
         fetch(`${API_BASE}/chat/config?tenant_id=${tenantId}`)
             .then(res => res.json())
             .then(data => {
-                const companyName = (data && data.company_name) ? data.company_name : tenantId;
+                const companyName = (data && data.company_name) ? data.company_name : 'MANAS BOT';
                 if (titleEl) titleEl.textContent = companyName + " Support";
 
                 if (data && data.chatbot_greeting_message) {
@@ -51,7 +54,13 @@
                     demoTitle.textContent = companyName;
                 }
             })
-            .catch(e => console.error("Could not load company profile:", e));
+            .catch(e => {
+                console.error("Could not load company profile:", e);
+                // Always clear the Loading... screen even on error
+                const demoTitle = document.getElementById('demo-title');
+                if (demoTitle) demoTitle.textContent = 'MANAS BOT';
+                if (titleEl) titleEl.textContent = 'MANAS BOT Support';
+            });
 
         let isOpen = false;
         let chatEnded = false;
