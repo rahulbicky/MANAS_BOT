@@ -12,8 +12,7 @@ const CLIENT_ADMIN_URL = _isLocal
     : 'https://manasbot-1.onrender.com';
 
 // Global Fetch Interceptor — attaches auth headers to all /admin/ requests
-// New system: Authorization: Bearer <jwt> for employee-facing routes
-// Legacy: X-Auth-Token: super-admin-secret for per-tenant config routes (get_tenant_db)
+// Authorization: Bearer <jwt> for authenticated employee/admin routes
 const originalFetch = window.fetch;
 window.fetch = async function() {
     let [resource, config] = arguments;
@@ -27,7 +26,6 @@ window.fetch = async function() {
         if (!isAuthEndpoint) {
             const token = sessionStorage.getItem('seller_token');
             if (token) config.headers['Authorization'] = 'Bearer ' + token;
-            config.headers['X-Auth-Token'] = 'super-admin-secret';
         }
     }
 

@@ -9,3 +9,6 @@ manasbot/
 tenants.json
 security_tests/
 logs/
+_backups_phase1/
+_backups_phase2/
+test_async_perf.db

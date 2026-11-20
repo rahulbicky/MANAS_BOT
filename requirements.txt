@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-streamlit
 langchain
 langchain-groq
 cryptography
@@ -8,7 +7,6 @@ sqlalchemy
 python-dotenv
 requests
 bcrypt
-plotly
 pandas
 slowapi
 psycopg2-binary
@@ -20,3 +18,4 @@ httpx
 beautifulsoup4
 apscheduler
 PyJWT
+alembic>=1.13.0

@@ -554,7 +554,7 @@ def _generate_username(name: str, session) -> str:
     return candidate
 
 
-def register_tenant(name: str, db_url: str = "", admin_password: str = "admin", notification_email: str = "", logo_b64: str = None) -> dict:
+def register_tenant(name: str, db_url: str = "", admin_password: str = None, notification_email: str = "", logo_b64: str = None) -> dict:
     """Register a new client. db_url is accepted but ignored (all data in central DB)."""
     session = _get_central_session()
     try:
@@ -567,6 +567,12 @@ def register_tenant(name: str, db_url: str = "", admin_password: str = "admin", 
             session.add(starter_plan)
             session.commit()
             session.refresh(starter_plan)
+
+        if not admin_password:
+            import secrets
+            admin_password = secrets.token_urlsafe(12)
+        elif len(admin_password) < 4:
+            raise ValueError("Admin password must be at least 4 characters.")
 
         password_hash = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
         username = _generate_username(name, session)
@@ -632,7 +638,9 @@ def create_demo_tenant(name: str, db_url: str = "") -> dict:
             session.commit()
             session.refresh(starter_plan)
 
-        password_hash = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
+        import secrets
+        demo_password = secrets.token_urlsafe(12)
+        password_hash = bcrypt.hashpw(demo_password.encode(), bcrypt.gensalt()).decode()
         username = _generate_username(name, session)
 
         new_tenant = CentralTenant(
@@ -684,17 +692,16 @@ def create_demo_tenant(name: str, db_url: str = "") -> dict:
     finally:
         session.close()
 
-def _tenant_to_dict(tenant: CentralTenant, plan_name: str = None) -> dict:
+def _tenant_to_dict(tenant: CentralTenant, plan_name: str = None, include_hash: bool = False) -> dict:
     if not tenant: return None
     if plan_name is None:
         plan_name = tenant.plan.name if tenant.plan else "Starter"
-    return {
+    d = {
         "id": tenant.id,
         "name": tenant.name,
         "username": tenant.username or "",
         "db_url": tenant.db_url or "",
         "api_key": tenant.api_key,
-        "admin_password_hash": tenant.admin_password_hash,
         "is_active": tenant.is_active,
         "is_demo_account": getattr(tenant, "is_demo_account", False),
         "created_at": str(tenant.created_at),
@@ -704,6 +711,9 @@ def _tenant_to_dict(tenant: CentralTenant, plan_name: str = None) -> dict:
         "notification_email": tenant.notification_email,
         "current_plan": plan_name
     }
+    if include_hash:
+        d["admin_password_hash"] = tenant.admin_password_hash
+    return d
 
 def get_all_tenants(use_cache: bool = True) -> list:
     global _tenant_cache_data, _tenant_cache_time
@@ -793,7 +803,7 @@ def verify_client_password(tenant_id: str, password: str) -> bool:
             return False
         stored_hash = t.admin_password_hash
         if not stored_hash:
-            return password == "admin"
+            return False
         return bcrypt.checkpw(password.encode(), stored_hash.encode())
     finally:
         session.close()

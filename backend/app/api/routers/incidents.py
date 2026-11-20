@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from dotenv import load_dotenv
 
 from ....database import (
@@ -29,7 +29,7 @@ from ....database import (
     reopen_incident,
 )
 from ...schemas.models import IncidentCreate, IncidentUpdate, IncidentResponse
-from ...core.security import require_role
+from ...core.security import require_role, get_employee_from_token
 
 load_dotenv()
 
@@ -137,18 +137,26 @@ def _notify_client_incident_update(incident: dict, client_email: str, client_nam
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post("/incidents", response_model=IncidentResponse)
 async def create_incident_endpoint(
+    request: Request,
     payload: IncidentCreate,
     background_tasks: BackgroundTasks,
     x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
 ):
     """Client opens a new support incident."""
-    # Validate client token
-    if x_auth_token != "super-admin-secret":
-        if not x_auth_token:
-            raise HTTPException(status_code=401, detail="Authentication token missing.")
+    authorized = False
+    if x_auth_token:
         tenant = get_tenant_by_id(payload.tenant_id)
-        if not tenant or tenant.get("api_key") != x_auth_token:
-            raise HTTPException(status_code=403, detail="Invalid token.")
+        if tenant and tenant.get("api_key") == x_auth_token:
+            authorized = True
+    if not authorized:
+        try:
+            emp = await get_employee_from_token(request)
+            if emp and emp.get("is_active"):
+                authorized = True
+        except Exception:
+            pass
+    if not authorized:
+        raise HTTPException(status_code=401, detail="Authentication token missing or invalid.")
 
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="Title cannot be empty.")
@@ -170,16 +178,25 @@ async def create_incident_endpoint(
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get("/incidents", response_model=List[IncidentResponse])
 async def get_my_incidents(
+    request: Request,
     tenant_id: str = Query(...),
     x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
 ):
     """Client fetches their own incident list."""
-    if x_auth_token != "super-admin-secret":
-        if not x_auth_token:
-            raise HTTPException(status_code=401, detail="Authentication token missing.")
+    authorized = False
+    if x_auth_token:
         tenant = get_tenant_by_id(tenant_id)
-        if not tenant or tenant.get("api_key") != x_auth_token:
-            raise HTTPException(status_code=403, detail="Invalid token.")
+        if tenant and tenant.get("api_key") == x_auth_token:
+            authorized = True
+    if not authorized:
+        try:
+            emp = await get_employee_from_token(request)
+            if emp and emp.get("is_active"):
+                authorized = True
+        except Exception:
+            pass
+    if not authorized:
+        raise HTTPException(status_code=401, detail="Authentication token missing or invalid.")
 
     return get_incidents_by_tenant(tenant_id)
 
@@ -189,16 +206,26 @@ async def get_my_incidents(
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post("/incidents/mark-read")
 async def mark_incidents_read(
+    request: Request,
     tenant_id: str = Query(...),
     x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
 ):
     """Client calls this when they open the Support tab — clears the unread badge."""
-    if x_auth_token != "super-admin-secret":
-        if not x_auth_token:
-            raise HTTPException(status_code=401, detail="Authentication token missing.")
+    authorized = False
+    if x_auth_token:
         tenant = get_tenant_by_id(tenant_id)
-        if not tenant or tenant.get("api_key") != x_auth_token:
-            raise HTTPException(status_code=403, detail="Invalid token.")
+        if tenant and tenant.get("api_key") == x_auth_token:
+            authorized = True
+    if not authorized:
+        try:
+            emp = await get_employee_from_token(request)
+            if emp and emp.get("is_active"):
+                authorized = True
+        except Exception:
+            pass
+    if not authorized:
+        raise HTTPException(status_code=401, detail="Authentication token missing or invalid.")
+
     mark_all_incidents_read(tenant_id)
     return {"message": "Marked as read."}
 
@@ -214,8 +241,6 @@ async def reopen_incident_endpoint(
     """Client re-opens a closed incident (must own the incident)."""
     if not x_auth_token:
         raise HTTPException(status_code=401, detail="Authentication token missing.")
-    if x_auth_token == "super-admin-secret":
-        raise HTTPException(status_code=403, detail="Use the PUT endpoint to update as seller.")
     # Resolve tenant_id from token
     from ....database import get_all_tenants
     tenants = get_all_tenants()

@@ -17,11 +17,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the core backend code
+# Copy the core backend and frontend code
 COPY backend/ backend/
-
-# Copy tenant registry (needed at runtime)
-COPY tenants.json .
+COPY frontend/ frontend/
 
 # Expose port 8000 for Cloud Run
 EXPOSE 8000

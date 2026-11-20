@@ -47,10 +47,13 @@ async def authenticate_client(request: Request, payload: AuthRequest):
 @router.post("/seller-auth")
 @limiter.limit("5/minute")
 async def authenticate_seller(request: Request, payload: SellerAuthRequest):
-    """[DEPRECATED] Legacy seller password login. Use POST /admin/employee-login instead."""
-    if payload.password == SELLER_PASSWORD:
-        return {"authenticated": True, "token": "super-admin-secret"}
-    raise HTTPException(status_code=401, detail="Invalid seller password.")
+    """[DEPRECATED] Legacy seller password login has been retired.
+    Use POST /admin/employee-login to obtain a secure JWT token.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail="The /admin/seller-auth endpoint has been retired for security. Please authenticate via /admin/employee-login.",
+    )
 
 
 @router.post("/resolve-username")

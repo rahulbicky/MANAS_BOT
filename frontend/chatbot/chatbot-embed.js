@@ -5,9 +5,12 @@
 (function () {
     const scriptTag = document.currentScript;
     const tenantId = scriptTag ? scriptTag.getAttribute('data-tenant-id') || 'e591484a-b724-4b84-8255-7e4e7ed6328b' : 'e591484a-b724-4b84-8255-7e4e7ed6328b';
-    const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://127.0.0.1:8000'
-        : 'https://manasbot.onrender.com';
+    const customApiUrl = scriptTag ? scriptTag.getAttribute('data-api-url') : null;
+    const API_BASE = customApiUrl || (
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://127.0.0.1:8000'
+            : 'https://manasbot.onrender.com'
+    );
 
     // 1. Load Fonts
     const link = document.createElement('link');

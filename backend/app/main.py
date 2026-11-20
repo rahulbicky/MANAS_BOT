@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from .core.rate_limiter import limiter
+from .core.config import ALLOWED_ORIGINS
 from ..logger import log_request, log_error, log_abuse, logger
 from ..metrics_store import record_request, record_error
 
@@ -158,10 +159,11 @@ async def logging_middleware(request: Request, call_next):
 
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
+allow_all_origins = "*" in ALLOWED_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all_origins else ALLOWED_ORIGINS,
+    allow_credentials=not allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

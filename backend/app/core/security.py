@@ -1,17 +1,15 @@
 """
 app/core/security.py
 --------------------
-Two parallel auth systems:
+Authentication and Authorization for ManasBot:
 
-  OLD (X-Auth-Token) — used by the existing client panel routes.
-    "super-admin-secret"  → seller/super-admin bypass
-    <api_key>             → per-tenant client auth
+  1. Tenant API Key (X-Auth-Token: <api_key>)
+     - Used by tenant/client panel routes and widget integrations.
+     - Validated against the tenant's registered api_key.
 
-  NEW (Authorization: Bearer <jwt>) — used by employee-facing routes.
-    JWT payload: {sub: employee_id, email, role, iat, exp}
-    Validated by get_employee_from_token() / require_role().
-
-Do not remove the old system until the client panel is fully migrated.
+  2. Employee JWT (Authorization: Bearer <jwt>)
+     - Used by internal employees on developer/admin routes.
+     - Validated by get_employee_from_token() and require_role().
 """
 import datetime
 from typing import Iterator, Optional
@@ -98,17 +96,14 @@ def require_tenant_or_role(*allowed_roles: str):
       - the employee/admin panel (Authorization: Bearer <jwt>) — access to any tenant's
         data, gated by role as usual.
 
-    A request must satisfy ONE of the two, not both. This lets a client manage their own
-    FAQs/profile/documents/leads via their API key alone, while employees still need a
-    valid JWT with sufficient role (the "X-Auth-Token: super-admin-secret" bypass sent by
-    the admin panel is NOT sufficient on its own — it still requires the employee JWT).
+    A request must satisfy ONE of the two, not both.
     """
     async def _check(
         request: Request,
         tenant_id: str = Query(..., description="The tenant/client ID"),
         x_auth_token: Optional[str] = Header(None, alias="X-Auth-Token"),
     ) -> dict:
-        if x_auth_token and x_auth_token != "super-admin-secret":
+        if x_auth_token:
             tenant = get_tenant_by_id(tenant_id)
             if tenant and tenant.get("api_key") == x_auth_token:
                 return {"auth_type": "tenant", "tenant_id": tenant_id}
@@ -126,28 +121,43 @@ def get_tenant_db(
 ) -> Iterator[Session]:
     """Dependency that returns a session to the correct tenant's database.
 
-    - Super-admin token ("super-admin-secret") bypasses per-tenant auth.
-    - All other callers must supply the tenant's own API key.
+    - Authenticates via either:
+      1. Tenant API key (X-Auth-Token == tenant.api_key)
+      2. Valid employee session (Authorization: Bearer <jwt>)
+    - Demo accounts are enforced read-only for mutation requests.
     """
-    if x_auth_token == "super-admin-secret":
-        # Super-admin bypass — no tenant-level check needed
-        pass
+    tenant = get_tenant_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail=f"Tenant '{tenant_id}' not found or is inactive.")
+
+    is_authorized = False
+
+    # 1. Check if caller provided valid tenant API key
+    if x_auth_token and tenant.get("api_key") == x_auth_token:
+        is_authorized = True
     else:
-        if not x_auth_token:
-            raise HTTPException(status_code=401, detail="Authentication token missing")
+        # 2. Check if caller is an authenticated active employee via Bearer JWT
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[len("Bearer "):]
+            payload = decode_employee_token(token)
+            if payload:
+                employee = get_employee_by_id(payload.get("sub"))
+                if employee and employee.get("is_active"):
+                    is_authorized = True
 
-        tenant = get_tenant_by_id(tenant_id)
-        if not tenant or tenant.get("api_key") != x_auth_token:
-            raise HTTPException(
-                status_code=403,
-                detail="Invalid token or unauthorized for this tenant",
-            )
+    if not is_authorized:
+        if not x_auth_token and not request.headers.get("Authorization"):
+            raise HTTPException(status_code=401, detail="Authentication credentials missing.")
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid token or unauthorized for this tenant.",
+        )
 
-        # Demo account read-only enforcement
-        if tenant.get("is_demo_account") and request.method in ["POST", "PUT", "DELETE"]:
-            # Allow chat endpoints since they need to POST messages
-            if not request.url.path.endswith("/chat"):
-                raise HTTPException(status_code=403, detail="Action not permitted on demo accounts.")
+    # Demo account read-only enforcement
+    if tenant.get("is_demo_account") and request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        if not request.url.path.endswith("/chat"):
+            raise HTTPException(status_code=403, detail="Action not permitted on demo accounts.")
 
     try:
         db = get_tenant_session(tenant_id)
