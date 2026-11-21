@@ -56,17 +56,16 @@ app.state.limiter = limiter
 # ── Startup: DB initialisation & tenant migration ────────────────────────────
 def _run_heavy_migrations():
     """
-    Runs schema migrations in a background thread so the server starts instantly.
-    All tenant data now lives in the central DB — one migration covers everything.
+    Runs necessary data migrations (e.g. tenant username backfills) in a background thread.
+    Database DDL schema migrations are version-controlled and managed via Alembic.
     """
-    from ..database import migrate_central_schema, migrate_usernames
+    from ..database import migrate_usernames
 
     try:
-        migrate_central_schema()
         migrate_usernames()
-        logger.info("[Startup] Central schema migration complete.")
+        logger.info("[Startup] Tenant username verification complete.")
     except Exception as e:
-        logger.warning(f"[Startup] Central schema migration failed: {e}")
+        logger.warning(f"[Startup] Background data initialization failed: {e}")
 
 
 @app.on_event("startup")

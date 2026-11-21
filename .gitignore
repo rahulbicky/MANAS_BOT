@@ -11,4 +11,5 @@ security_tests/
 logs/
 _backups_phase1/
 _backups_phase2/
+_backups_phase1_stability/
 test_async_perf.db

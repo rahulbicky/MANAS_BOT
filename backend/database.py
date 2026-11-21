@@ -6,7 +6,7 @@ import bcrypt
 import threading
 import time as _time
 from typing import Optional
-from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Float, Integer, ForeignKey, inspect, text
+from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Float, Integer, ForeignKey, inspect, text, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, joinedload
 from dotenv import load_dotenv
@@ -124,6 +124,7 @@ class Invoice(Base):
 
 class FAQ(Base):
     __tablename__ = "faqs"
+    __table_args__ = (Index("ix_faqs_tenant_id_is_active", "tenant_id", "is_active"),)
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String, index=True)
     question = Column(Text)
@@ -166,6 +167,7 @@ class BusinessProfile(Base):
 
 class ChatLog(Base):
     __tablename__ = "chat_logs_v2"
+    __table_args__ = (Index("ix_chat_logs_v2_tenant_id_created_at", "tenant_id", "created_at"),)
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String, index=True)
     session_id = Column(String, index=True)
@@ -181,6 +183,7 @@ class ChatLog(Base):
 
 class ChatFeedback(Base):
     __tablename__ = "chat_feedback"
+    __table_args__ = (Index("ix_chat_feedback_tenant_id_session_id", "tenant_id", "session_id"),)
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String, index=True)
     session_id = Column(String, index=True)
@@ -190,6 +193,7 @@ class ChatFeedback(Base):
 
 class KnowledgeDocument(Base):
     __tablename__ = "knowledge_documents"
+    __table_args__ = (Index("ix_knowledge_documents_tenant_id_is_active", "tenant_id", "is_active"),)
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String, index=True)
     filename = Column(String)
@@ -202,6 +206,7 @@ class KnowledgeDocument(Base):
 
 class Lead(Base):
     __tablename__ = "leads"
+    __table_args__ = (Index("ix_leads_tenant_id_created_at", "tenant_id", "created_at"),)
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id = Column(String, index=True)
     session_id = Column(String, index=True)

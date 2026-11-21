@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -41,22 +42,28 @@ class AddUrlRequest(BaseModel):
     url: str
 
 
-def _scrape_url(url: str) -> str:
+def _clean_html_text(html_content: str) -> str:
+    """Parse and clean HTML content in a worker thread."""
+    soup = BeautifulSoup(html_content, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n", strip=True)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return "\n".join(lines)
+
+
+async def _scrape_url(url: str) -> str:
+    """Asynchronously fetch and parse content from a URL using httpx.AsyncClient."""
     try:
-        with httpx.Client(timeout=15, follow_redirects=True) as client:
-            response = client.get(url, headers={"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"})
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(url, headers={"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"})
             response.raise_for_status()
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=400, detail=f"URL returned HTTP {e.response.status_code}: {url}")
     except httpx.RequestError as e:
         raise HTTPException(status_code=400, detail=f"Could not reach URL: {str(e)}")
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
-        tag.decompose()
-    text = soup.get_text(separator="\n", strip=True)
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return "\n".join(lines)
+    return await run_in_threadpool(_clean_html_text, response.text)
 
 
 def _parse_file(filename: str, content_bytes: bytes) -> str:
@@ -114,7 +121,7 @@ async def upload_document(
         )
 
     try:
-        content = _parse_file(file.filename, content_bytes)
+        content = await run_in_threadpool(_parse_file, file.filename, content_bytes)
     except HTTPException:
         raise
     except Exception as e:
@@ -166,7 +173,7 @@ async def add_url_document(
         KnowledgeDocument.is_active == True,
     ).first()
 
-    content = _scrape_url(url)
+    content = await _scrape_url(url)
 
     if not content.strip():
         raise HTTPException(status_code=400, detail="Could not extract any text content from that URL.")
@@ -210,7 +217,7 @@ async def refresh_url_documents(tenant_id: str = Query(...), db: Session = Depen
     refreshed, failed = 0, 0
     for doc in url_docs:
         try:
-            new_content = _scrape_url(doc.filename)
+            new_content = await _scrape_url(doc.filename)
             if new_content.strip():
                 doc.content = new_content
                 doc.file_size_bytes = len(new_content.encode('utf-8'))
