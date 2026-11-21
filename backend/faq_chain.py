@@ -9,9 +9,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 FAQ_MODELS = [
-    "llama-3.1-8b-instant",   # primary: fast, cheap, 128k context
-    "llama-3.3-70b-versatile", # fallback 1: high intelligence, 128k context
-    "gemma2-9b-it",           # fallback 2: reliable secondary provider
+    "qwen/qwen3.8-27b",        # primary: fast, high context, verified active
+    "openai/gpt-oss-20b",      # fallback: reliable secondary provider, verified active
 ]
 
 LANG_MAP = {

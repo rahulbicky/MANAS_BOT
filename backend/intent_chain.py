@@ -10,7 +10,10 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 VALID_INTENTS = {"pricing", "service_inquiry", "support", "contact", "information", "eligibility"}
-INTENT_MODELS = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "gemma2-9b-it"]
+INTENT_MODELS = [
+    "qwen/qwen3.8-27b",        # primary: fast, verified active
+    "openai/gpt-oss-20b",      # fallback: reliable secondary provider, verified active
+]
 
 
 def _build_intent_prompt(company: str, industry: str) -> ChatPromptTemplate:
