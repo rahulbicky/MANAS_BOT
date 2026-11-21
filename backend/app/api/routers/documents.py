@@ -25,10 +25,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..deps import get_tenant_db
-from ....database import KnowledgeDocument, get_tenant_limits
+from ....database import KnowledgeDocument, DocumentChunk, get_tenant_limits
 from ...schemas.models import DocumentResponse
 from ...utils.formatters import format_utc
 from ...core.security import require_tenant_or_role
+from ....rag import ingest_document, reingest_document, delete_document_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +141,22 @@ async def upload_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    # Ingest chunks & generate embeddings
+    chunk_count = await run_in_threadpool(
+        ingest_document,
+        document_id=doc.id,
+        tenant_id=tenant_id,
+        filename=file.filename,
+        file_type=ext.lstrip("."),
+        content=content,
+    )
+
     return {
         "id": doc.id, "filename": doc.filename, "file_type": doc.file_type,
         "is_active": doc.is_active, "created_at": format_utc(doc.created_at),
-        "file_size_bytes": doc.file_size_bytes
+        "file_size_bytes": doc.file_size_bytes,
+        "chunk_count": chunk_count,
     }
 
 
@@ -183,10 +196,19 @@ async def add_url_document(
         existing.file_size_bytes = len(content.encode('utf-8'))
         db.commit()
         db.refresh(existing)
+        chunk_count = await run_in_threadpool(
+            reingest_document,
+            document_id=existing.id,
+            tenant_id=tenant_id,
+            filename=url,
+            file_type="url",
+            new_content=content,
+        )
         return {
             "id": existing.id, "filename": existing.filename, "file_type": existing.file_type,
             "is_active": existing.is_active, "created_at": format_utc(existing.created_at),
-            "file_size_bytes": existing.file_size_bytes
+            "file_size_bytes": existing.file_size_bytes,
+            "chunk_count": chunk_count,
         }
 
     doc = KnowledgeDocument(
@@ -199,10 +221,21 @@ async def add_url_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    chunk_count = await run_in_threadpool(
+        ingest_document,
+        document_id=doc.id,
+        tenant_id=tenant_id,
+        filename=url,
+        file_type="url",
+        content=content,
+    )
+
     return {
         "id": doc.id, "filename": doc.filename, "file_type": doc.file_type,
         "is_active": doc.is_active, "created_at": format_utc(doc.created_at),
-        "file_size_bytes": doc.file_size_bytes
+        "file_size_bytes": doc.file_size_bytes,
+        "chunk_count": chunk_count,
     }
 
 
@@ -221,6 +254,15 @@ async def refresh_url_documents(tenant_id: str = Query(...), db: Session = Depen
             if new_content.strip():
                 doc.content = new_content
                 doc.file_size_bytes = len(new_content.encode('utf-8'))
+                db.commit()
+                await run_in_threadpool(
+                    reingest_document,
+                    document_id=doc.id,
+                    tenant_id=tenant_id,
+                    filename=doc.filename,
+                    file_type="url",
+                    new_content=new_content,
+                )
                 refreshed += 1
         except Exception as e:
             logger.warning(f"[URL Refresh] Failed for {doc.filename}: {e}")
@@ -232,14 +274,30 @@ async def refresh_url_documents(tenant_id: str = Query(...), db: Session = Depen
 
 @router.get("/docs", response_model=List[DocumentResponse], dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support", "viewer"))])
 async def get_documents(tenant_id: str = Query(...), db: Session = Depends(get_tenant_db)):
+    from sqlalchemy import func
     docs = db.query(KnowledgeDocument).filter(
         KnowledgeDocument.tenant_id == tenant_id, KnowledgeDocument.is_active == True
     ).all()
+
+    doc_ids = [d.id for d in docs]
+    chunk_counts = {}
+    if doc_ids:
+        counts = db.query(
+            DocumentChunk.document_id,
+            func.count(DocumentChunk.id)
+        ).filter(
+            DocumentChunk.tenant_id == tenant_id,
+            DocumentChunk.is_active == True,
+            DocumentChunk.document_id.in_(doc_ids)
+        ).group_by(DocumentChunk.document_id).all()
+        chunk_counts = {did: cnt for did, cnt in counts}
+
     return [
         {
             "id": d.id, "filename": d.filename, "file_type": d.file_type,
             "is_active": d.is_active, "created_at": format_utc(d.created_at),
-            "file_size_bytes": d.file_size_bytes
+            "file_size_bytes": d.file_size_bytes,
+            "chunk_count": chunk_counts.get(d.id, 0),
         }
         for d in docs
     ]
@@ -254,4 +312,10 @@ async def delete_document(doc_id: str, tenant_id: str = Query(...), db: Session 
         raise HTTPException(status_code=404, detail="Document not found")
     doc.is_active = False
     db.commit()
+    await run_in_threadpool(
+        delete_document_chunks,
+        document_id=doc_id,
+        tenant_id=tenant_id,
+        soft_delete=True,
+    )
     return {"message": "Document deleted"}

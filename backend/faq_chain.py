@@ -52,6 +52,7 @@ def _build_faq_prompt(
             "   - Email: Must be a valid email format (e.g., name@example.com) with an '@' and a domain.\n"
             "   - If both Name, a valid 10-digit Phone, and Email are provided, you MUST reply ONLY with: 'Thank you! Our support team has received your details and will contact you shortly.' DO NOT restate their details or offer validation commentary.\n"
             "6. FORMAT: Use short, professional bullet points for answers.\n"
+            "7. CITATIONS: When using information from the 'VERIFIED KNOWLEDGE BASE CONTEXT', cite the document filename in brackets (e.g. '[Source: Return_Policy.pdf]'). Do not fabricate citations.\n"
             "\n\nFAQ Context:\n{context}\n\n"
             "{doc_context}"
         )
@@ -83,8 +84,18 @@ def get_faq_context(intent: str, tenant_id: str, db=None) -> str:
             db.close()
 
 
-def get_document_context(tenant_id: str, db=None, max_chars: int = 5000) -> str:
-    """Get context from uploaded Knowledge Documents with a character limit."""
+def get_document_context(tenant_id: str, query: str = None, db=None, max_chars: int = 8000) -> str:
+    """Get context from Knowledge Documents. Uses semantic RAG retrieval when query is provided, with fallback."""
+    if query:
+        try:
+            from .rag import retrieve_relevant_chunks, format_rag_context
+            chunks = retrieve_relevant_chunks(tenant_id=tenant_id, query=query, top_k=5, threshold=0.60, db=db)
+            if chunks:
+                return format_rag_context(chunks)
+        except Exception as rag_err:
+            logger.debug(f"[faq_chain] Semantic RAG retrieval notice for tenant {tenant_id}: {rag_err}")
+
+    # Fallback to direct document text if no query or zero semantic chunks
     should_close = False
     if db is None:
         db = get_tenant_session(tenant_id)
@@ -145,7 +156,7 @@ def get_answer(question: str, intent: str, tenant_id: str, language: str = "en",
         lang_name = LANG_MAP.get(language, "English")
 
         context = get_faq_context(intent, tenant_id, db=db)
-        doc_context = get_document_context(tenant_id, db=db, max_chars=8000)
+        doc_context = get_document_context(tenant_id, query=question, db=db, max_chars=8000)
 
         logger.info(f"[faq_chain] tenant={tenant_id} | company={company} | intent={intent} | lang={language} | faq_chars={len(context)} | doc_chars={len(doc_context)}")
 
@@ -231,7 +242,7 @@ async def aget_answer(
         if faq_context is None:
             faq_context = get_faq_context(intent, tenant_id, db=db)
         if doc_context is None:
-            doc_context = get_document_context(tenant_id, db=db, max_chars=8000)
+            doc_context = get_document_context(tenant_id, query=question, db=db, max_chars=8000)
 
         if should_close and db:
             db.close()

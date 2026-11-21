@@ -113,6 +113,11 @@
         .cb-dot { width: 6px; height: 6px; background-color: var(--cb-primary); border-radius: 50%; animation: cb-bounce 1.4s infinite ease-in-out both; }
         @keyframes cb-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
 
+        /* Source Citations */
+        .cb-sources { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(0, 0, 0, 0.08); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 0.72rem; }
+        .cb-sources-label { color: var(--cb-text-muted); font-weight: 600; margin-right: 2px; }
+        .cb-source-pill { display: inline-flex; align-items: center; gap: 3px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; padding: 2px 7px; border-radius: 12px; font-size: 0.72rem; font-weight: 500; line-height: 1.2; }
+
         @media (max-width: 480px) {
             .cb-window { bottom: 0; right: 0; border-radius: 0; width: 100vw; height: 100dvh; max-height: none; }
         }
@@ -282,14 +287,14 @@
             const data = await res.json();
             removeTyping(typingId);
             lastBotMsg = data.answer;
-            appendMsg('bot', data.answer);
+            appendMsg('bot', data.answer, data.sources);
         } catch (err) {
             removeTyping(typingId);
             appendMsg('system', 'Connection failed.');
         }
     };
 
-    function appendMsg(sender, text) {
+    function appendMsg(sender, text, sources) {
         const now = new Date();
         const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -299,6 +304,25 @@
         const div = document.createElement('div');
         div.className = `cb-msg cb-${sender}`;
         div.innerHTML = (sender === 'bot' && typeof marked !== 'undefined') ? marked.parse(text) : (sender === 'system' ? text : `<p>${text}</p>`);
+
+        if (sender === 'bot' && sources && Array.isArray(sources) && sources.length > 0) {
+            const sourcesDiv = document.createElement('div');
+            sourcesDiv.className = 'cb-sources';
+            const label = document.createElement('span');
+            label.className = 'cb-sources-label';
+            label.textContent = 'Sources:';
+            sourcesDiv.appendChild(label);
+            sources.forEach(s => {
+                const pill = document.createElement('span');
+                pill.className = 'cb-source-pill';
+                const scorePct = Math.round((s.relevance_score || 0) * 100);
+                pill.title = `Relevance: ${scorePct}%`;
+                const icon = (s.filename && s.filename.startsWith('http')) ? '🔗' : '📄';
+                pill.textContent = `${icon} ${s.filename} (${scorePct}%)`;
+                sourcesDiv.appendChild(pill);
+            });
+            div.appendChild(sourcesDiv);
+        }
 
         wrapper.appendChild(div);
 

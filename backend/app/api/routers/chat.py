@@ -34,7 +34,8 @@ from ....intent_chain import detect_intent, adetect_intent
 from ....faq_chain import get_answer, aget_answer
 from ....metrics_store import record_tokens
 from ....alerting import check_and_alert
-from ...schemas.models import ChatRequest, ChatResponse, FeedbackRequest
+from ...schemas.models import ChatRequest, ChatResponse, FeedbackRequest, SourceCitation
+from ....rag import aretrieve_relevant_chunks, format_rag_context
 
 logger = logging.getLogger(__name__)
 
@@ -92,28 +93,6 @@ def _fetch_chat_read_context(tenant_id: str) -> dict:
         ).all()
         faq_list = [{"intent": f.intent, "question": f.question, "answer": f.answer} for f in faqs]
 
-        # 4. Knowledge documents
-        docs = db.query(KnowledgeDocument.filename, KnowledgeDocument.content).filter(
-            KnowledgeDocument.tenant_id == tenant_id,
-            KnowledgeDocument.is_active == True
-        ).all()
-        doc_context = ""
-        if docs:
-            doc_context = "### UPLOADED KNOWLEDGE BASE DOCUMENTS:\n"
-            curr_len = len(doc_context)
-            max_chars = 8000
-            for doc in docs:
-                header = f"--- Document: {doc.filename} ---\n"
-                content = doc.content or ""
-                if curr_len + len(header) + len(content) > max_chars:
-                    rem = max_chars - curr_len - len(header)
-                    if rem > 100:
-                        doc_context += header + content[:rem] + "... [truncated]\n\n"
-                    break
-                else:
-                    doc_context += header + content + "\n\n"
-                    curr_len = len(doc_context)
-
         return {
             "monthly_messages": monthly_messages,
             "company": company,
@@ -121,7 +100,6 @@ def _fetch_chat_read_context(tenant_id: str) -> dict:
             "desc": desc,
             "custom_prompt": custom_prompt,
             "faqs": faq_list,
-            "doc_context": doc_context,
         }
     finally:
         if db:
@@ -342,9 +320,25 @@ async def chat_endpoint(
             )
 
         background_tasks.add_task(check_and_alert)
-        return ChatResponse(answer=thank_you, intent=intent, resolved=True)
+        return ChatResponse(answer=thank_you, intent=intent, resolved=True, sources=[])
 
-    # ── 9. Phase B: Async LLM Answer Generation (Zero DB Connections) ──
+    # ── 9. Phase B: Async Semantic RAG Retrieval & LLM Generation ─────
+    retrieved_chunks = await aretrieve_relevant_chunks(
+        tenant_id=payload.tenant_id,
+        query=payload.question,
+        top_k=5,
+        threshold=0.65,
+    )
+    doc_context = format_rag_context(retrieved_chunks)
+    sources = [
+        SourceCitation(
+            document_id=c.document_id,
+            filename=c.filename,
+            relevance_score=c.similarity_score,
+        )
+        for c in retrieved_chunks
+    ]
+
     # Match FAQs for this specific intent from pre-fetched list
     matching_faqs = [f for f in context_data["faqs"] if f["intent"] == intent]
     if matching_faqs:
@@ -362,7 +356,7 @@ async def chat_endpoint(
         desc=context_data["desc"],
         custom_prompt=context_data["custom_prompt"],
         faq_context=faq_context,
-        doc_context=context_data["doc_context"],
+        doc_context=doc_context,
     )
 
     estimated_tokens = int(
@@ -392,7 +386,7 @@ async def chat_endpoint(
 
     background_tasks.add_task(check_and_alert)
 
-    return ChatResponse(answer=answer, intent=intent, resolved=False)
+    return ChatResponse(answer=answer, intent=intent, resolved=False, sources=sources)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

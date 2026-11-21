@@ -140,7 +140,7 @@
 
                 if (res.ok) {
                     const data = await res.json();
-                    appendMsg('bot', data.answer);
+                    appendMsg('bot', data.answer, data.sources);
                 } else {
                     const err = await res.json();
                     appendMsg('system', `Error: ${err.detail || 'Service unavailable'}`);
@@ -213,7 +213,7 @@
             return `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="12" width="24" height="18" rx="5" fill="white" fill-opacity="0.95"/><rect x="19" y="5" width="2" height="7" rx="1" fill="white" fill-opacity="0.9"/><circle cx="20" cy="4.5" r="2.5" fill="white"/><circle cx="14.5" cy="20" r="3" fill="#ea580c"/><circle cx="25.5" cy="20" r="3" fill="#ea580c"/><circle cx="15.5" cy="19" r="1" fill="white"/><circle cx="26.5" cy="19" r="1" fill="white"/><rect x="13" y="25" width="14" height="2.5" rx="1.25" fill="#ea580c" fill-opacity="0.7"/><rect x="4" y="17" width="4" height="6" rx="2" fill="white" fill-opacity="0.8"/><rect x="32" y="17" width="4" height="6" rx="2" fill="white" fill-opacity="0.8"/></svg>`;
         }
 
-        function appendMsg(sender, text) {
+        function appendMsg(sender, text, sources) {
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             let container = msgsArea;
@@ -251,6 +251,24 @@
                     div.innerHTML = marked.parse(text);
                 } else {
                     div.textContent = text;
+                }
+                if (sources && Array.isArray(sources) && sources.length > 0) {
+                    const sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'cb-sources';
+                    const label = document.createElement('span');
+                    label.className = 'cb-sources-label';
+                    label.textContent = 'Sources:';
+                    sourcesDiv.appendChild(label);
+                    sources.forEach(s => {
+                        const pill = document.createElement('span');
+                        pill.className = 'cb-source-pill';
+                        const scorePct = Math.round((s.relevance_score || 0) * 100);
+                        pill.title = `Relevance: ${scorePct}%`;
+                        const icon = (s.filename && s.filename.startsWith('http')) ? '🔗' : '📄';
+                        pill.textContent = `${icon} ${s.filename} (${scorePct}%)`;
+                        sourcesDiv.appendChild(pill);
+                    });
+                    div.appendChild(sourcesDiv);
                 }
             } else {
                 div.textContent = text;

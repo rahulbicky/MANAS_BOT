@@ -17,10 +17,16 @@ class ChatRequest(BaseModel):
     page_url: Optional[str] = "direct"
     language: Optional[str] = "en"
 
+class SourceCitation(BaseModel):
+    document_id: str
+    filename: str
+    relevance_score: float
+
 class ChatResponse(BaseModel):
     answer: str
     intent: str
     resolved: bool
+    sources: Optional[List[SourceCitation]] = []
 
 class FeedbackRequest(BaseModel):
     tenant_id: str
@@ -110,6 +116,7 @@ class DocumentResponse(BaseModel):
     is_active: bool
     created_at: str
     file_size_bytes: int = 0
+    chunk_count: int = 0
 
 
 # ── Tenants ─────────────────────────────────────────────────────────────────

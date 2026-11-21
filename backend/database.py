@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import create_engine, Column, String, Text, Boolean, DateTime, Float, Integer, ForeignKey, inspect, text, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, joinedload
+from pgvector.sqlalchemy import Vector
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -203,6 +204,33 @@ class KnowledgeDocument(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    # Cascading relationship to individual semantic chunks
+    chunks = relationship("DocumentChunk", backref="document", cascade="all, delete-orphan", lazy="dynamic")
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        Index("ix_document_chunks_tenant_id_is_active", "tenant_id", "is_active"),
+        Index("ix_document_chunks_document_id", "document_id"),
+        Index(
+            "ix_document_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String, ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(String, nullable=False, index=True)
+    chunk_index = Column(Integer, nullable=False)
+    chunk_text = Column(Text, nullable=False)
+    token_count = Column(Integer, default=0)
+    embedding = Column(Vector(384), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class Lead(Base):
     __tablename__ = "leads"

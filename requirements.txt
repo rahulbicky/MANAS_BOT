@@ -19,3 +19,6 @@ beautifulsoup4
 apscheduler
 PyJWT
 alembic>=1.13.0
+pgvector>=0.3.0
+fastembed>=0.4.0
+langchain-text-splitters>=0.2.0

@@ -390,6 +390,41 @@
     40% { transform: scale(1); opacity: 1; }
 }
 
+/* Source Citations */
+.cb-sources {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+}
+.cb-sources-label {
+    color: var(--cb-text-muted);
+    font-weight: 600;
+    margin-right: 2px;
+}
+.cb-source-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.2;
+    transition: background 0.2s ease;
+    cursor: default;
+}
+.cb-source-pill:hover {
+    background: #e2e8f0;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 480px) {
     .cb-container {

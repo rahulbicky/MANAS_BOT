@@ -1079,10 +1079,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const typeLabel = isUrl
                 ? `<span style="background:#eef2ff;color:#4338ca;padding:2px 7px;border-radius:20px;font-size:0.78rem;font-weight:600;">🔗 URL</span>`
                 : `<code style="background:#f5f5f5;padding:2px 4px;">${escapeHTML(d.file_type).toUpperCase()}</code>`;
+            const chunksCount = d.chunk_count !== undefined ? d.chunk_count : 0;
+            const chunksBadge = `<span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600;">${chunksCount} chunks</span>`;
             tr.innerHTML = `
                 <td style="white-space:nowrap"><small>${new Date(d.created_at).toLocaleDateString()}</small></td>
                 <td>${sourceDisplay}</td>
                 <td>${typeLabel}</td>
+                <td style="white-space:nowrap">${chunksBadge}</td>
                 <td><span style="color:${d.is_active?'#107c41':'#666'}">${d.is_active ? 'Active' : 'Archived'}</span></td>
                 <td>
                     ${d.is_active ? `<button class="btn danger-btn" onclick="deleteDoc('${d.id}')" style="padding:0.2rem 0.6rem;font-size:0.75rem;">Delete</button>` : '-'}
