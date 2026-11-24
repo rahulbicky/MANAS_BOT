@@ -36,6 +36,20 @@ Base = declarative_base()
 CentralBase = Base  # alias kept for backward compatibility
 
 
+def utc_now() -> datetime.datetime:
+    """Return timezone-aware current UTC datetime."""
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def ensure_utc(dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """Ensure a datetime is timezone-aware UTC, converting naive timestamps safely."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
 # ──────────────────────────────────────────────
 # CENTRAL / SHARED MODELS
 # ──────────────────────────────────────────────
@@ -52,8 +66,8 @@ class Incident(Base):
     seller_response = Column(Text, default="")
     notes = Column(Text, default="")
     client_read = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     resolved_at = Column(DateTime, nullable=True)
 
 class Plan(Base):
@@ -67,7 +81,7 @@ class Plan(Base):
     export_enabled = Column(Boolean, default=False)
     languages = Column(String, default="en")
     default_trial_days = Column(Integer, default=14)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class CentralTenant(Base):
     __tablename__ = "tenants"
@@ -79,12 +93,13 @@ class CentralTenant(Base):
     admin_password_hash = Column(String)
     is_active = Column(Boolean, default=True)
     is_demo_account = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    subscription_start_date = Column(DateTime, default=datetime.datetime.utcnow)
-    subscription_end_date = Column(DateTime, default=lambda: datetime.datetime.utcnow() + datetime.timedelta(days=14))
+    created_at = Column(DateTime, default=utc_now)
+    subscription_start_date = Column(DateTime, default=utc_now)
+    subscription_end_date = Column(DateTime, default=lambda: utc_now() + datetime.timedelta(days=14))
     deactivated_at = Column(DateTime, nullable=True)
     current_plan_id = Column(String, ForeignKey("plans.id"))
     notification_email = Column(String, default="")
+    conversation_retention_days = Column(Integer, default=0, nullable=True)  # 0 or None = indefinite
     plan = relationship("Plan", backref="tenants")
 
 
@@ -100,7 +115,7 @@ class Admin(Base):
     email = Column(String, index=True)
     password_hash = Column(String)
     role = Column(String, default="admin")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -110,7 +125,7 @@ class Employee(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False)  # super_admin | admin | support | viewer
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     # Tracks when role last changed — tokens issued before this timestamp are invalidated
     role_changed_at = Column(DateTime, nullable=True)
 
@@ -121,7 +136,7 @@ class Invoice(Base):
     amount_inr = Column(String)
     plan_name = Column(String)
     status = Column(String, default="Paid")
-    payment_date = Column(DateTime, default=datetime.datetime.utcnow)
+    payment_date = Column(DateTime, default=utc_now)
 
 class FAQ(Base):
     __tablename__ = "faqs"
@@ -132,8 +147,8 @@ class FAQ(Base):
     answer = Column(Text)
     intent = Column(String, index=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 class BusinessProfile(Base):
     __tablename__ = "business_profile"
@@ -164,7 +179,7 @@ class BusinessProfile(Base):
     logo_url = Column(String, default="")
     chatbot_greeting_message = Column(Text, default="Hi! How can I help you today?")
     chatbot_system_prompt = Column(Text, default="You are a helpful customer support assistant.")
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 class ChatLog(Base):
     __tablename__ = "chat_logs_v2"
@@ -180,7 +195,7 @@ class ChatLog(Base):
     language = Column(String, default="en")
     user_ip = Column(String)
     response_time_ms = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class ChatFeedback(Base):
     __tablename__ = "chat_feedback"
@@ -190,7 +205,7 @@ class ChatFeedback(Base):
     session_id = Column(String, index=True)
     rating = Column(Integer)
     comment = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class KnowledgeDocument(Base):
     __tablename__ = "knowledge_documents"
@@ -202,8 +217,8 @@ class KnowledgeDocument(Base):
     file_type = Column(String)
     file_size_bytes = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Cascading relationship to individual semantic chunks
     chunks = relationship("DocumentChunk", backref="document", cascade="all, delete-orphan", lazy="dynamic")
@@ -230,7 +245,7 @@ class DocumentChunk(Base):
     token_count = Column(Integer, default=0)
     embedding = Column(Vector(384), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 class Lead(Base):
     __tablename__ = "leads"
@@ -244,7 +259,7 @@ class Lead(Base):
     raw_message = Column(Text, default="")
     page_url = Column(String, default="")
     is_notified = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
 # Keep TenantBase as alias for any external code that imports it
 TenantBase = Base
@@ -270,13 +285,20 @@ def _invalidate_tenant_cache():
 def _get_central_engine():
     global _central_engine
     if not _central_engine:
-        _central_engine = create_engine(
-            CENTRAL_DB_URL,
-            pool_size=5,
-            max_overflow=10,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-        )
+        if CENTRAL_DB_URL.startswith("sqlite"):
+            _central_engine = create_engine(
+                CENTRAL_DB_URL,
+                connect_args={"check_same_thread": False},
+            )
+        else:
+            _central_engine = create_engine(
+                CENTRAL_DB_URL,
+                pool_size=10,
+                max_overflow=20,
+                pool_pre_ping=True,
+                pool_recycle=300,
+                pool_timeout=30,
+            )
     return _central_engine
 
 def _get_central_session():
@@ -350,7 +372,7 @@ def get_all_plans() -> list:
             "export_enabled": p.export_enabled,
             "languages": p.languages,
             "default_trial_days": getattr(p, "default_trial_days", 14),
-            "created_at": str(getattr(p, "created_at", datetime.datetime.utcnow())),
+            "created_at": str(getattr(p, "created_at", utc_now())),
             "active_users_count": plan_counts.get(p.id, 0)
         } for p in plans]
     finally:
@@ -486,7 +508,7 @@ def reopen_incident(incident_id: str, tenant_id: str) -> Optional[dict]:
             return None
         incident.status = "open"
         incident.resolved_at = None
-        incident.updated_at = datetime.datetime.utcnow()
+        incident.updated_at = utc_now()
         session.commit()
         session.refresh(incident)
         d = _incident_to_dict(incident)
@@ -518,13 +540,13 @@ def update_incident(incident_id: str, data: dict) -> Optional[dict]:
         if "status" in data:
             incident.status = data["status"]
             if data["status"] == "resolved" and not incident.resolved_at:
-                incident.resolved_at = datetime.datetime.utcnow()
+                incident.resolved_at = utc_now()
         if "seller_response" in data:
             incident.seller_response = data["seller_response"]
             incident.client_read = False
         if "notes" in data:
             incident.notes = data["notes"]
-        incident.updated_at = datetime.datetime.utcnow()
+        incident.updated_at = utc_now()
         session.commit()
         session.refresh(incident)
         return _incident_to_dict(incident)
@@ -619,8 +641,8 @@ def register_tenant(name: str, db_url: str = "", admin_password: str = None, not
             admin_password_hash=password_hash,
             notification_email=notification_email,
             current_plan_id=starter_plan.id,
-            subscription_start_date=datetime.datetime.utcnow(),
-            subscription_end_date=datetime.datetime.utcnow() + datetime.timedelta(days=trial_days)
+            subscription_start_date=utc_now(),
+            subscription_end_date=utc_now() + datetime.timedelta(days=trial_days)
         )
         session.add(new_tenant)
         session.commit()
@@ -684,8 +706,8 @@ def create_demo_tenant(name: str, db_url: str = "") -> dict:
             admin_password_hash=password_hash,
             is_demo_account=True,
             current_plan_id=starter_plan.id,
-            subscription_start_date=datetime.datetime.utcnow(),
-            subscription_end_date=datetime.datetime.utcnow() + datetime.timedelta(days=3650)
+            subscription_start_date=utc_now(),
+            subscription_end_date=utc_now() + datetime.timedelta(days=3650)
         )
         session.add(new_tenant)
         session.commit()
@@ -750,14 +772,14 @@ def _tenant_to_dict(tenant: CentralTenant, plan_name: str = None, include_hash: 
 
 def get_all_tenants(use_cache: bool = True) -> list:
     global _tenant_cache_data, _tenant_cache_time
-    if use_cache and _tenant_cache_data is not None and (datetime.datetime.utcnow().timestamp() - _tenant_cache_time) < _TENANT_CACHE_TTL:
+    if use_cache and _tenant_cache_data is not None and (utc_now().timestamp() - _tenant_cache_time) < _TENANT_CACHE_TTL:
         return _tenant_cache_data
     session = _get_central_session()
     try:
         tenants = session.query(CentralTenant).options(joinedload(CentralTenant.plan)).all()
         result = [_tenant_to_dict(t, plan_name=t.plan.name if t.plan else "Starter") for t in tenants]
         _tenant_cache_data = result
-        _tenant_cache_time = datetime.datetime.utcnow().timestamp()
+        _tenant_cache_time = utc_now().timestamp()
         return result
     finally:
         session.close()
@@ -797,7 +819,7 @@ def deactivate_tenant(tenant_id: str) -> bool:
         t = session.query(CentralTenant).filter(CentralTenant.id == tenant_id).first()
         if t:
             t.is_active = False
-            t.deactivated_at = datetime.datetime.utcnow()
+            t.deactivated_at = utc_now()
             session.commit()
             _invalidate_tenant_cache()
             return True
@@ -859,10 +881,11 @@ def extend_subscription(tenant_id: str, days: int = 30, plan_name: Optional[str]
         t = session.query(CentralTenant).filter(CentralTenant.id == tenant_id).first()
         if not t: return None
         current_end = t.subscription_end_date
-        if not current_end or current_end < datetime.datetime.utcnow():
-            new_end = datetime.datetime.utcnow() + datetime.timedelta(days=days)
+        now = utc_now()
+        if not current_end or ensure_utc(current_end) < now:
+            new_end = now + datetime.timedelta(days=days)
         else:
-            new_end = current_end + datetime.timedelta(days=days)
+            new_end = ensure_utc(current_end) + datetime.timedelta(days=days)
         t.subscription_end_date = new_end
         if plan_name:
             plan = session.query(Plan).filter(Plan.name == plan_name).first()
@@ -1039,7 +1062,7 @@ def update_employee_role(employee_id: str, new_role: str) -> Optional[dict]:
         if not employee:
             return None
         employee.role = new_role
-        employee.role_changed_at = datetime.datetime.utcnow()
+        employee.role_changed_at = utc_now()
         session.commit()
         session.refresh(employee)
         return _employee_to_dict(employee)
@@ -1091,6 +1114,7 @@ def migrate_central_schema():
         ("tenants", "subscription_start_date", "TIMESTAMP"),
         ("tenants", "subscription_end_date", "TIMESTAMP"),
         ("tenants", "deactivated_at", "TIMESTAMP"),
+        ("tenants", "conversation_retention_days", "INTEGER DEFAULT 0"),
         ("plans", "default_trial_days", "INTEGER DEFAULT 14"),
         ("plans", "created_at", "TIMESTAMP"),
         # tenant_id on all shared tables

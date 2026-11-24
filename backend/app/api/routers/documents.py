@@ -28,6 +28,7 @@ from ..deps import get_tenant_db
 from ....database import KnowledgeDocument, DocumentChunk, get_tenant_limits
 from ...schemas.models import DocumentResponse
 from ...utils.formatters import format_utc
+from ...utils.security_validation import validate_public_url
 from ...core.security import require_tenant_or_role
 from ....rag import ingest_document, reingest_document, delete_document_chunks
 
@@ -54,7 +55,14 @@ def _clean_html_text(html_content: str) -> str:
 
 
 async def _scrape_url(url: str) -> str:
-    """Asynchronously fetch and parse content from a URL using httpx.AsyncClient."""
+    """Asynchronously fetch and parse content from a URL using httpx.AsyncClient.
+    Enforces SSRF protection before initiating network connection.
+    """
+    try:
+        url = validate_public_url(url)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             response = await client.get(url, headers={"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"})
@@ -166,9 +174,10 @@ async def add_url_document(
     payload: AddUrlRequest = ...,
     db: Session = Depends(get_tenant_db),
 ):
-    url = payload.url.strip()
-    if not url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
+    try:
+        url = validate_public_url(payload.url)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
 
     limits = get_tenant_limits(tenant_id)
     doc_count = db.query(KnowledgeDocument).filter(

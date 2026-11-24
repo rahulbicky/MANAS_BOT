@@ -5,6 +5,7 @@ Intelligent document chunking engine for ManasBot Advanced RAG.
 Splits text into semantically coherent chunks using RecursiveCharacterTextSplitter,
 preserving paragraph and sentence boundaries, metadata, and token estimates.
 """
+import hashlib
 from dataclasses import dataclass, asdict
 from typing import List, Optional
 import logging
@@ -32,6 +33,7 @@ class DocumentChunkData:
     tenant_id: str
     filename: str
     file_type: str
+    content_hash: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -100,6 +102,7 @@ def chunk_document(
             continue
 
         tokens = estimate_token_count(cleaned_str)
+        chash = hashlib.sha256(cleaned_str.encode("utf-8")).hexdigest()
         chunks.append(
             DocumentChunkData(
                 chunk_index=idx,
@@ -109,6 +112,7 @@ def chunk_document(
                 tenant_id=tenant_id,
                 filename=filename,
                 file_type=file_type,
+                content_hash=chash,
             )
         )
 

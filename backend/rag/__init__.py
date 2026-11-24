@@ -27,6 +27,8 @@ from .retriever import (
     RetrievedChunk,
     retrieve_relevant_chunks,
     aretrieve_relevant_chunks,
+    rerank_chunks,
+    deduplicate_chunks,
     DEFAULT_TOP_K,
     DEFAULT_SIMILARITY_THRESHOLD,
 )
@@ -38,6 +40,26 @@ from .ingestion import (
 from .prompts import (
     format_rag_context,
     get_rag_citation_instruction,
+)
+from .graph import (
+    ConversationState,
+    build_chat_graph,
+    compiled_chat_graph,
+    run_chat_graph,
+    resolve_conversational_query,
+)
+from .checkpointer import (
+    PostgresCheckpointSaver,
+    AsyncPostgresSaver,
+    get_checkpointer,
+)
+from .tools import (
+    ToolExecutionResult,
+    execute_knowledge_retrieval,
+    execute_business_profile,
+    execute_lead_capture,
+    execute_support_incident,
+    get_tenant_agent_tools,
 )
 
 __all__ = [
@@ -58,6 +80,8 @@ __all__ = [
     "RetrievedChunk",
     "retrieve_relevant_chunks",
     "aretrieve_relevant_chunks",
+    "rerank_chunks",
+    "deduplicate_chunks",
     "DEFAULT_TOP_K",
     "DEFAULT_SIMILARITY_THRESHOLD",
     "ingest_document",
@@ -65,4 +89,18 @@ __all__ = [
     "reingest_document",
     "format_rag_context",
     "get_rag_citation_instruction",
+    "ConversationState",
+    "build_chat_graph",
+    "compiled_chat_graph",
+    "run_chat_graph",
+    "resolve_conversational_query",
+    "PostgresCheckpointSaver",
+    "AsyncPostgresSaver",
+    "get_checkpointer",
+    "ToolExecutionResult",
+    "execute_knowledge_retrieval",
+    "execute_business_profile",
+    "execute_lead_capture",
+    "execute_support_incident",
+    "get_tenant_agent_tools",
 ]

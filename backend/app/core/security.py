@@ -18,14 +18,14 @@ import jwt
 from fastapi import Depends, HTTPException, Query, Header, Request
 from sqlalchemy.orm import Session
 
-from ...database import get_tenant_session, get_tenant_by_id, get_employee_by_id
+from ...database import get_tenant_session, get_tenant_by_id, get_employee_by_id, ensure_utc
 from .config import JWT_SECRET, JWT_EXPIRE_HOURS
 
 
 # ── Employee JWT helpers ─────────────────────────────────────────────────────
 
 def create_employee_token(employee_id: str, email: str, role: str, role_changed_at: str = None) -> str:
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc)
     payload = {
         "sub": employee_id,
         "email": email,
@@ -69,12 +69,13 @@ async def get_employee_from_token(request: Request) -> dict:
         if iat is not None:
             # PyJWT ≥2: iat is decoded as an int (Unix timestamp)
             if isinstance(iat, (int, float)):
-                iat_dt = datetime.datetime.utcfromtimestamp(iat)
+                iat_dt = datetime.datetime.fromtimestamp(iat, tz=datetime.timezone.utc)
             else:
-                iat_dt = iat  # already a datetime (older PyJWT)
+                iat_dt = ensure_utc(iat)
             if isinstance(role_changed_at, str):
                 role_changed_at = datetime.datetime.fromisoformat(role_changed_at)
-            if role_changed_at > iat_dt:
+            role_changed_dt = ensure_utc(role_changed_at)
+            if role_changed_dt > iat_dt:
                 raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
 
     return employee
@@ -107,6 +108,11 @@ def require_tenant_or_role(*allowed_roles: str):
             tenant = get_tenant_by_id(tenant_id)
             if tenant and tenant.get("api_key") == x_auth_token:
                 return {"auth_type": "tenant", "tenant_id": tenant_id}
+            if not request.headers.get("Authorization"):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Invalid token or unauthorized for this tenant.",
+                )
         employee = await get_employee_from_token(request)
         if employee["role"] not in allowed_roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions.")

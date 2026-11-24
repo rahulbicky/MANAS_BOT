@@ -30,6 +30,7 @@ def _refresh_all_tenants_urls():
     """
     try:
         from ..database import get_all_tenants, get_tenant_session, KnowledgeDocument
+        from .utils.security_validation import is_safe_public_url
         import httpx
         from bs4 import BeautifulSoup
 
@@ -53,6 +54,11 @@ def _refresh_all_tenants_urls():
 
                     for doc in url_docs:
                         try:
+                            if not is_safe_public_url(doc.filename):
+                                logger.warning(f"[Scheduler] Skipping unsafe URL for tenant {tenant_id}: {doc.filename}")
+                                total_failed += 1
+                                continue
+
                             with httpx.Client(timeout=15, follow_redirects=True) as client:
                                 response = client.get(
                                     doc.filename,
@@ -81,7 +87,7 @@ def _refresh_all_tenants_urls():
             except Exception as e:
                 logger.warning(f"[Scheduler] Could not process tenant {tenant_id}: {e}")
 
-        now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         logger.info(
             f"[Scheduler] Knowledge refresh complete at {now} — "
             f"{total_refreshed} URL doc(s) refreshed, {total_failed} failed, "
@@ -92,9 +98,22 @@ def _refresh_all_tenants_urls():
         logger.error(f"[Scheduler] Fatal error during knowledge refresh: {e}")
 
 
+def _run_scheduled_retention_audit():
+    """Daily scheduled dry-run retention audit across all active tenants."""
+    try:
+        from .services.retention_service import RetentionService
+        reports = RetentionService.generate_cleanup_report()
+        logger.info(f"[Scheduler] Retention dry-run audit completed for {len(reports)} tenant(s).")
+    except Exception as e:
+        logger.warning(f"[Scheduler] Retention audit encountered an error: {e}")
+
+
 def start_scheduler():
     """Start the background scheduler (called on FastAPI startup)."""
     global _scheduler
+    if _scheduler and _scheduler.running:
+        logger.info("[Scheduler] Scheduler already running — skipping duplicate start.")
+        return
     _scheduler = BackgroundScheduler(timezone="UTC")
 
     # Run every 6 hours → 4 times per day
@@ -107,8 +126,18 @@ def start_scheduler():
         max_instances=1,  # Prevent overlapping runs
     )
 
+    # Run daily retention dry-run audit
+    _scheduler.add_job(
+        _run_scheduled_retention_audit,
+        trigger=IntervalTrigger(hours=24),
+        id="retention_audit",
+        name="Tenant Conversation Retention Audit",
+        replace_existing=True,
+        max_instances=1,
+    )
+
     _scheduler.start()
-    logger.info("[Scheduler] Started — AI knowledge URL refresh scheduled every 6 hours (4x/day).")
+    logger.info("[Scheduler] Started — Knowledge refresh (6h) and retention audit (24h) active.")
 
 
 def stop_scheduler():

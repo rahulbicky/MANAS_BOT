@@ -44,6 +44,7 @@ def _build_tenant_response(t: dict) -> TenantResponse:
         current_plan=t.get("current_plan", "Starter"),
         limits=get_tenant_limits(t["id"]),
         notification_email=t.get("notification_email", ""),
+        conversation_retention_days=t.get("conversation_retention_days", 0),
     )
 
 
@@ -123,3 +124,43 @@ async def hard_delete_tenant_endpoint(tenant_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Tenant not found or could not be deleted.")
     return {"message": "Tenant and all associated data permanently deleted."}
+
+
+@router.get("/retention-policy", dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support"))])
+async def get_retention_policy_endpoint(tenant_id: str = Query(...)):
+    """Get retention policy for a tenant."""
+    try:
+        from ...services.retention_service import RetentionService
+        return RetentionService.get_tenant_policy(tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/retention-policy", dependencies=[Depends(require_role("super_admin", "admin"))])
+async def set_retention_policy_endpoint(tenant_id: str = Query(...), days: int = Query(..., ge=0)):
+    """Set retention policy days for a tenant (0 = indefinite)."""
+    try:
+        from ...services.retention_service import RetentionService
+        return RetentionService.set_tenant_policy(tenant_id, days)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/retention-report", dependencies=[Depends(require_tenant_or_role("super_admin", "admin", "support"))])
+async def get_retention_report_endpoint(tenant_id: Optional[str] = Query(None)):
+    """Dry-run retention report showing expired count and cutoff date without deleting."""
+    try:
+        from ...services.retention_service import RetentionService
+        return RetentionService.generate_cleanup_report(tenant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/retention-cleanup", dependencies=[Depends(require_tenant_or_role("super_admin", "admin"))])
+async def execute_retention_cleanup_endpoint(tenant_id: str = Query(...), dry_run: bool = Query(True)):
+    """Execute retention cleanup. Defaults to dry_run=True."""
+    try:
+        from ...services.retention_service import RetentionService
+        return RetentionService.execute_retention_cleanup(tenant_id, dry_run=dry_run)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

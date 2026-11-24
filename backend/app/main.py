@@ -107,7 +107,11 @@ async def shutdown_stop_scheduler():
         logger.warning(f"Error stopping scheduler: {e}")
 
 
-# ── Rate-limit exceeded handler (logs abuse) ─────────────────────────────────
+# ── Centralized Exception Handlers ──────────────────────────────────────────
+from fastapi import HTTPException
+from fastapi.exceptions import RequestValidationError
+
+
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     ip = request.client.host if request.client else "unknown"
     log_abuse(ip=ip, path=request.url.path, reason=f"Rate limit exceeded: {exc.detail}")
@@ -118,7 +122,37 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
+async def _http_exception_handler(request: Request, exc: HTTPException):
+    record_error()
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers,
+    )
+
+
+async def _validation_exception_handler(request: Request, exc: RequestValidationError):
+    record_error()
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
+
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    record_error()
+    tb = traceback.format_exc()
+    log_error(tenant_id="-", path=request.url.path, error=exc, tb=tb)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Please try again later."},
+    )
+
+
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+app.add_exception_handler(HTTPException, _http_exception_handler)
+app.add_exception_handler(RequestValidationError, _validation_exception_handler)
+app.add_exception_handler(Exception, _unhandled_exception_handler)
 
 
 # ── Request logging + metrics middleware ─────────────────────────────────────

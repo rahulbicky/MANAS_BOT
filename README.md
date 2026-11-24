@@ -32,7 +32,10 @@
 - [Installation and Setup](#installation-and-setup)
 - [Environment Variables](#environment-variables)
 - [Running the Application Locally](#running-the-application-locally)
+- [Docker Compose Deployment](#docker-compose-deployment)
 - [API Overview](#api-overview)
+- [Automated Testing & Quality Assurance](#automated-testing--quality-assurance)
+- [Enterprise Documentation Links](#enterprise-documentation-links)
 - [Future Improvements](#future-improvements)
 - [License](#license)
 
@@ -515,11 +518,37 @@ Open your browser and navigate to the application URLs:
 - **Live Chatbot Widget Preview:** [http://127.0.0.1:8080/chatbot/](http://127.0.0.1:8080/chatbot/)
 
 ### 4. Running Automated Tests
-Run the complete automated test suite (42 unit and integration tests):
+Run the complete automated regression and production test suite (**86 tests** passing across 6 test suites):
 
 ```bash
-python -m unittest test_phase2_rag.py test_async_chat_performance.py
+python test_phase2_rag.py ; python test_async_chat_performance.py ; python test_langgraph_chat.py ; python test_phase3_production.py ; python test_rag_benchmarking.py ; python test_security_hardening.py
 ```
+
+To run the complete 10-step live application journey integration test:
+```bash
+python backend/scripts/verify_live_application.py
+```
+
+---
+
+## Docker Compose Deployment
+
+ManasBot includes a multi-container `docker-compose.yml` pre-configured with PostgreSQL and pgvector:
+
+```bash
+# 1. Clone repository & configure environment variables
+cp .env.example .env
+
+# 2. Build and launch all services
+docker compose up -d --build
+
+# 3. Check container logs
+docker compose logs -f backend
+```
+
+Services started:
+- **`manasbot-postgres`**: PostgreSQL 16 with `pgvector` extension enabled on port `5432`.
+- **`manasbot-api`**: FastAPI application on port `8000`.
 
 ---
 
@@ -537,13 +566,33 @@ The FastAPI backend exposes clean, documented REST endpoints. Key endpoints incl
 | `POST` | `/admin/auth` | Client admin authentication returning client API token | No |
 | `POST` | `/admin/tenant` | Register a new client tenant workspace | Super Admin JWT |
 | `POST` | `/admin/upload-doc` | Upload and chunk knowledge base file (PDF, DOCX, CSV, etc.) | Client API Token |
-| `POST` | `/admin/add-url` | Scrape, chunk, and index a web URL | Client API Token |
+| `POST` | `/admin/add-url` | Scrape, chunk, and index a web URL (with SSRF protection) | Client API Token |
 | `GET` | `/admin/docs` | List all documents and chunk count for a tenant | Client API Token |
 | `GET` | `/admin/leads` | Retrieve captured leads for a tenant with pagination | Client API Token |
 | `GET` | `/admin/chats` | Retrieve conversation logs with export capabilities | Client API Token |
+| `GET` | `/admin/retention-policy` | View chat log and lead data retention policies | Client API Token |
+| `POST` | `/admin/retention-cleanup` | Trigger dry-run or live data retention cleanup | Client API Token |
 | `GET` | `/health` | Application health and database readiness check | No |
 
-Complete interactive API documentation and testing schemas are available at `/docs` (Swagger UI) and `/redoc` (ReDoc).
+Complete interactive API documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc).
+
+---
+
+## Enterprise Documentation Links
+
+For deep architectural, operational, security, and developer specifications, consult our enterprise guides:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System architecture, three-phase chat lifecycle, and concurrency locking.
+- [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — Complete REST API reference, request/response schemas, and error codes.
+- [DATABASE_DOCUMENTATION.md](DATABASE_DOCUMENTATION.md) — Central & tenant database schemas, HNSW vector indexing, and connection pooling.
+- [RAG_ARCHITECTURE.md](RAG_ARCHITECTURE.md) — FastEmbed ONNX multilingual embeddings, chunking, deduplication, and cross-encoder reranking.
+- [AGENTIC_AI_ARCHITECTURE.md](AGENTIC_AI_ARCHITECTURE.md) — LangGraph state graphs, Agentic AI tools, and checkpointer persistence.
+- [SECURITY.md](SECURITY.md) — Authentication, RBAC, SSRF defense, AES-GCM Fernet encryption, and rate limiting.
+- [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — Docker Compose, Cloud Run, Render, and database seeding procedures.
+- [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) — Full environment variable dictionary and defaults.
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Runtime error resolution, database recovery, and model fallbacks.
+- [TESTING_GUIDE.md](TESTING_GUIDE.md) — Automated testing matrix, benchmark metrics, and CI/CD verification.
+- [CHANGELOG.md](CHANGELOG.md) — Project release history and upgrade logs.
 
 ---
 

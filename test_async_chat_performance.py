@@ -350,7 +350,7 @@ class AsyncPerformanceTestSuite(unittest.TestCase):
         """Test that requests are blocked when monthly quota is exceeded."""
         session = db_mod._get_central_session()
         try:
-            now = db_mod.datetime.datetime.utcnow()
+            now = db_mod.utc_now()
             for i in range(105):
                 log = ChatLog(
                     tenant_id=self.tenant_id,
@@ -590,7 +590,7 @@ class AsyncPerformanceTestSuite(unittest.TestCase):
                     session_id=f"page_sess_{i}",
                     encrypted_question=encrypt_text(f"Question {i}"),
                     encrypted_answer=encrypt_text(f"Answer {i}"),
-                    created_at=db_mod.datetime.datetime.utcnow() + db_mod.datetime.timedelta(minutes=i),
+                    created_at=db_mod.utc_now() + db_mod.datetime.timedelta(minutes=i),
                 )
                 session.add(log)
             session.commit()
@@ -631,7 +631,7 @@ class AsyncPerformanceTestSuite(unittest.TestCase):
                     name=f"Lead User {i}",
                     phone="9000000000",
                     email=f"lead{i}@example.com",
-                    created_at=db_mod.datetime.datetime.utcnow() + db_mod.datetime.timedelta(minutes=i),
+                    created_at=db_mod.utc_now() + db_mod.datetime.timedelta(minutes=i),
                 )
                 session.add(lead)
             session.commit()

@@ -78,7 +78,7 @@ def _send_alert_email(subject: str, body_html: str) -> bool:
         <h2 style="color:#f44747;">🚨 Chatbot Alert</h2>
         {body_html}
         <p style="color:#999;font-size:12px;margin-top:20px;">
-            Sent by your AI Chatbot monitoring system at {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC.
+            Sent by your AI Chatbot monitoring system at {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC.
         </p>
         </div></body></html>
         """

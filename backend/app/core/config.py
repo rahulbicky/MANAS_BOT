@@ -40,3 +40,8 @@ ALLOWED_ORIGINS: list = [origin.strip() for origin in ALLOWED_ORIGINS_RAW.split(
 ALERT_TRAFFIC_RPM: int = int(os.getenv("ALERT_TRAFFIC_RPM", "50"))
 ALERT_ERROR_RATE_PCT: float = float(os.getenv("ALERT_ERROR_RATE_PCT", "20"))
 ALERT_TOKENS_PER_MIN: int = int(os.getenv("ALERT_TOKENS_PER_MIN", "50000"))
+
+# ── Conversational RAG & Memory Settings ────────────────────────────────────
+HISTORY_WINDOW_TURNS: int = int(os.getenv("HISTORY_WINDOW_TURNS", "5"))
+CHAT_TOP_K: int = int(os.getenv("CHAT_TOP_K", "5"))
+CHAT_SIMILARITY_THRESHOLD: float = float(os.getenv("CHAT_SIMILARITY_THRESHOLD", "0.65"))

@@ -5,8 +5,9 @@ Semantic retrieval engine for ManasBot Advanced RAG.
 Generates query embeddings with E5 'query: ' prefix, performs cosine similarity search
 with strict tenant_id isolation, applies similarity thresholds, and returns top-K chunks.
 """
+import re
 from dataclasses import dataclass, asdict
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
 import logging
 import numpy as np
 from sqlalchemy import text
@@ -20,6 +21,77 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TOP_K = 5
 DEFAULT_SIMILARITY_THRESHOLD = 0.65
+MULTILINGUAL_ADAPTED_THRESHOLD = 0.58
+RRF_K = 60
+
+
+def is_cross_lingual_or_non_ascii(text: str) -> bool:
+    """Check if query contains non-ASCII characters (e.g. Hindi, Arabic, Chinese, Russian, emojis)."""
+    return any(ord(c) >= 128 for c in text)
+
+
+def deduplicate_chunks(chunks: List["RetrievedChunk"], threshold: float = 0.90) -> List["RetrievedChunk"]:
+    """Remove redundant/duplicate chunks to prevent monopolization of LLM context window."""
+    unique: List[RetrievedChunk] = []
+    seen_texts = set()
+
+    for c in chunks:
+        norm = " ".join(c.chunk_text.strip().lower().split())
+        if norm in seen_texts:
+            continue
+        # Check high token overlap with already selected
+        is_dup = False
+        words_c = set(norm.split())
+        if len(words_c) > 5:
+            for u in unique:
+                words_u = set(" ".join(u.chunk_text.strip().lower().split()).split())
+                if words_u:
+                    jaccard = len(words_c & words_u) / max(1, len(words_c | words_u))
+                    if jaccard >= threshold:
+                        is_dup = True
+                        break
+        if not is_dup:
+            seen_texts.add(norm)
+            unique.append(c)
+    return unique
+
+
+def rerank_chunks(query: str, candidates: List["RetrievedChunk"], top_n: int = DEFAULT_TOP_K) -> List["RetrievedChunk"]:
+    """
+    Cross-encoder style re-ranking combining bi-encoder cosine similarity,
+    exact phrase matching, and token overlap density.
+    """
+    if not candidates:
+        return []
+
+    q_words = [w.lower() for w in re.findall(r'\w+', query) if len(w) >= 2]
+    q_lower = query.lower().strip()
+
+    scored: List[Tuple[float, RetrievedChunk]] = []
+    for c in candidates:
+        text_lower = c.chunk_text.lower()
+        base_score = c.similarity_score
+
+        # Exact phrase bonus
+        phrase_bonus = 0.15 if len(q_lower) > 5 and q_lower in text_lower else 0.0
+
+        # Keyword term density bonus
+        if q_words:
+            matched_terms = sum(1 for w in q_words if w in text_lower)
+            term_bonus = 0.15 * (matched_terms / len(q_words))
+        else:
+            term_bonus = 0.0
+
+        final_score = min(1.0, round(base_score * 0.70 + phrase_bonus + term_bonus, 4))
+        scored.append((final_score, c))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    reranked = []
+    for score, chunk in scored:
+        chunk.similarity_score = max(chunk.similarity_score, score)
+        reranked.append(chunk)
+
+    return deduplicate_chunks(reranked)[:top_n]
 
 
 @dataclass
@@ -59,6 +131,8 @@ def retrieve_relevant_chunks(
     """
     if not query or not query.strip():
         return []
+
+    effective_threshold = MULTILINGUAL_ADAPTED_THRESHOLD if is_cross_lingual_or_non_ascii(query) else threshold
 
     # 1. Generate query embedding (prefixes with 'query: ')
     query_vector = embed_query(query)
@@ -111,7 +185,7 @@ def retrieve_relevant_chunks(
             results: List[RetrievedChunk] = []
             for row in rows:
                 score = float(row.similarity_score)
-                if score >= threshold:
+                if score >= effective_threshold:
                     results.append(
                         RetrievedChunk(
                             chunk_id=str(row.chunk_id),
@@ -122,7 +196,7 @@ def retrieve_relevant_chunks(
                             similarity_score=round(score, 4),
                         )
                     )
-            return results[:top_k]
+            return rerank_chunks(query, results, top_n=top_k)
 
         # ── SQLite Fallback (In-memory testing & offline local dev) ───────
         else:
@@ -150,7 +224,7 @@ def retrieve_relevant_chunks(
                 c_arr = np.array(raw_emb, dtype=np.float32)
                 # Both q_arr and c_arr are L2 normalized, so dot product = cosine similarity
                 score = float(np.dot(q_arr, c_arr))
-                if score >= threshold:
+                if score >= effective_threshold:
                     candidates.append(
                         RetrievedChunk(
                             chunk_id=str(chunk.id),
@@ -162,8 +236,7 @@ def retrieve_relevant_chunks(
                         )
                     )
 
-            candidates.sort(key=lambda x: x.similarity_score, reverse=True)
-            return candidates[:top_k]
+            return rerank_chunks(query, candidates, top_n=top_k)
 
     except Exception as e:
         logger.error(f"[retriever] Semantic retrieval error for tenant {tenant_id}: {e}", exc_info=True)

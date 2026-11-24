@@ -28,8 +28,9 @@ def _build_faq_prompt(
     desc: str,
     custom_prompt: str,
     lang_name: str,
+    chat_history: list = None,
 ) -> ChatPromptTemplate:
-    """Construct prompt template for FAQ chatbot."""
+    """Construct prompt template for FAQ chatbot with optional multi-turn conversation history."""
     if custom_prompt:
         system_prompt = (
             f"{custom_prompt}\n\n"
@@ -56,10 +57,17 @@ def _build_faq_prompt(
             "{doc_context}"
         )
 
-    return ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("human", "{question}")
-    ])
+    messages = [("system", system_prompt)]
+    if chat_history:
+        for turn in chat_history:
+            q = turn.get("question", "")
+            a = turn.get("answer", "")
+            if q:
+                messages.append(("human", q))
+            if a:
+                messages.append(("ai", a))
+    messages.append(("human", "{question}"))
+    return ChatPromptTemplate.from_messages(messages)
 
 
 def get_faq_context(intent: str, tenant_id: str, db=None) -> str:
@@ -198,6 +206,7 @@ async def aget_answer(
     custom_prompt: str = None,
     faq_context: str = None,
     doc_context: str = None,
+    chat_history: list = None,
 ) -> str:
     """Get AI answer asynchronously using ChatGroq.ainvoke.
 
@@ -250,7 +259,7 @@ async def aget_answer(
 
         logger.info(f"[faq_chain] async tenant={tenant_id} | company={company} | intent={intent} | lang={language} | faq_chars={len(faq_context)} | doc_chars={len(doc_context)}")
 
-        prompt = _build_faq_prompt(company, industry, desc, custom_prompt, lang_name)
+        prompt = _build_faq_prompt(company, industry, desc, custom_prompt, lang_name, chat_history=chat_history)
 
         last_err = None
         for model_name in FAQ_MODELS:

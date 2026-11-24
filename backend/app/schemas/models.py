@@ -143,6 +143,7 @@ class TenantResponse(BaseModel):
     current_plan: str = "Starter"
     limits: Optional[dict] = None
     notification_email: Optional[str] = ""
+    conversation_retention_days: Optional[int] = 0
 
 
 # ── Billing ─────────────────────────────────────────────────────────────────

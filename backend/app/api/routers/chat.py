@@ -36,6 +36,7 @@ from ....metrics_store import record_tokens
 from ....alerting import check_and_alert
 from ...schemas.models import ChatRequest, ChatResponse, FeedbackRequest, SourceCitation
 from ....rag import aretrieve_relevant_chunks, format_rag_context
+from ...services.chat_service import ChatService
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def _fetch_chat_read_context(tenant_id: str) -> dict:
         db = get_tenant_session(tenant_id)
 
         # 1. Monthly message quota count
-        first_day_of_month = datetime.datetime.utcnow().replace(
+        first_day_of_month = datetime.datetime.now(datetime.timezone.utc).replace(
             day=1, hour=0, minute=0, second=0, microsecond=0
         )
         monthly_messages = (
@@ -184,213 +185,21 @@ async def chat_endpoint(
     1. Validation & Input Sanitization (XSS)
     2. Tenant Expiry & Language Gate Validation
     3. Phase A: Fast DB Read (offloaded via run_in_threadpool, DB closed immediately)
-    4. Quota Gate Check
-    5. Phase B: Async Groq Execution (adetect_intent, aget_answer with zero DB connections)
-    6. Phase C: Fast DB Write (offloaded via run_in_threadpool, committed & closed immediately)
+    4. Multi-Turn Session Memory Loading & Decryption
+    5. Phase B: LangGraph Execution & AI Processing (zero DB connections held during LLM inference)
+    6. Phase C: Fast DB Write (committed & closed immediately)
     7. Background Alerts & Notifications Dispatch
     """
-    start_time = time.time()
     user_ip = request.client.host if request.client else None
-
-    # ── 1. XSS sanitisation ────────────────────────────────────────────
-    payload.question = html.escape(payload.question)
-
-    # ── 2. Tenant lookup & validation ──────────────────────────────────
-    current_tenant = get_tenant_by_id(payload.tenant_id)
-    if not current_tenant:
-        return ChatResponse(
-            answer="Sorry, this chatbot is not properly configured. Please contact support.",
-            intent="error_tenant_not_found",
-            resolved=False,
-        )
-
-    # ── 3. Subscription expiry check ───────────────────────────────────
-    end_date_str = current_tenant.get("subscription_end_date")
-    if end_date_str:
-        try:
-            end_date = datetime.datetime.fromisoformat(end_date_str)
-            if end_date < datetime.datetime.utcnow():
-                return ChatResponse(
-                    answer="Service temporarily unavailable",
-                    intent="error_subscription_expired",
-                    resolved=False,
-                )
-        except (ValueError, TypeError):
-            pass
-
-    # ── 4. Language gate check ─────────────────────────────────────────
-    limits = get_tenant_limits(payload.tenant_id)
-    if (
-        payload.language != "en"
-        and limits.get("languages") != "all"
-        and payload.language not in limits.get("languages", ["en"])
-    ):
-        return ChatResponse(
-            answer="Multi-language support is not available on your current plan. Please upgrade to Pro or Enterprise.",
-            intent="error_feature_gated",
-            resolved=False,
-        )
-
-    # ── 5. Phase A: Fast DB Read Context ───────────────────────────────
-    try:
-        context_data = await run_in_threadpool(_fetch_chat_read_context, payload.tenant_id)
-    except Exception as e:
-        logger.error(f"[chat router] Phase A context fetch failed for tenant {payload.tenant_id}: {e}")
-        return ChatResponse(
-            answer="Sorry, this chatbot is not properly configured. Please contact support.",
-            intent="error_tenant_not_found",
-            resolved=False,
-        )
-
-    # ── 6. Monthly quota check ─────────────────────────────────────────
-    if context_data["monthly_messages"] >= limits.get("messages_per_month", 1000):
-        return ChatResponse(
-            answer="Monthly message quota reached for your current plan. Please upgrade to continue.",
-            intent="error_quota_exceeded",
-            resolved=False,
-        )
-
-    # ── 7. Phase B: Async Intent Detection (Zero DB Connections) ───────
-    intent = await adetect_intent(
-        payload.question,
-        tenant_id=payload.tenant_id,
-        company=context_data["company"],
-        industry=context_data["industry"],
-    )
-
-    # ── 8. Lead Capture Detection ──────────────────────────────────────
-    phone_match = re.search(r'\b(\d{10})\b', payload.question)
-    email_match = re.search(r'[\w.+-]+@[\w-]+\.[\w.]+', payload.question)
-    words = payload.question.split()
-    name_words = [
-        w for w in words
-        if not re.fullmatch(r'\d+', w) and '@' not in w and len(w) >= 2
-    ]
-    has_contact_info = bool(phone_match and email_match and name_words)
-
-    if has_contact_info:
-        phone_str = phone_match.group(1)
-        email_str = email_match.group(0)
-        name_str = " ".join(
-            w for w in words
-            if w != phone_str and w != email_str and w not in (",", ";", "-")
-        ).strip()
-
-        thank_you = "Thank you! Our support team has received your details and will contact you shortly."
-        intent = "lead_captured"
-
-        encrypted_q = encrypt_text(payload.question)
-        encrypted_a = encrypt_text(thank_you)
-        record_tokens(int((len(words) + len(thank_you.split())) * 1.3))
-
-        notif_email = current_tenant.get("notification_email", "") if current_tenant else ""
-        lead_data = {
-            "name": name_str,
-            "phone": phone_str,
-            "email": email_str,
-            "raw_message": payload.question,
-            "is_notified": bool(notif_email),
-        }
-
-        # Phase C: Save turn
-        response_time_ms = int((time.time() - start_time) * 1000)
-        await run_in_threadpool(
-            _save_chat_turn,
-            tenant_id=payload.tenant_id,
-            session_id=payload.session_id,
-            encrypted_q=encrypted_q,
-            encrypted_a=encrypted_a,
-            intent=intent,
-            page_url=payload.page_url,
-            language=payload.language,
-            is_resolved=True,
-            response_time_ms=response_time_ms,
-            user_ip=user_ip,
-            lead_data=lead_data,
-        )
-
-        if notif_email:
-            lead_info = f"Name: {name_str}\nPhone: {phone_str}\nEmail: {email_str}"
-            background_tasks.add_task(
-                send_lead_notification,
-                client_email=notif_email,
-                client_name=current_tenant.get("name", "Unknown"),
-                lead_info=lead_info,
-                inquiry=payload.question,
-            )
-
-        background_tasks.add_task(check_and_alert)
-        return ChatResponse(answer=thank_you, intent=intent, resolved=True, sources=[])
-
-    # ── 9. Phase B: Async Semantic RAG Retrieval & LLM Generation ─────
-    retrieved_chunks = await aretrieve_relevant_chunks(
-        tenant_id=payload.tenant_id,
-        query=payload.question,
-        top_k=5,
-        threshold=0.65,
-    )
-    doc_context = format_rag_context(retrieved_chunks)
-    sources = [
-        SourceCitation(
-            document_id=c.document_id,
-            filename=c.filename,
-            relevance_score=c.similarity_score,
-        )
-        for c in retrieved_chunks
-    ]
-
-    # Match FAQs for this specific intent from pre-fetched list
-    matching_faqs = [f for f in context_data["faqs"] if f["intent"] == intent]
-    if matching_faqs:
-        faq_context = "".join(f"Q: {f['question']}\nA: {f['answer']}\n\n" for f in matching_faqs)
-    else:
-        faq_context = "No specific FAQ found for this intent."
-
-    answer = await aget_answer(
-        question=payload.question,
-        intent=intent,
-        tenant_id=payload.tenant_id,
-        language=payload.language,
-        company=context_data["company"],
-        industry=context_data["industry"],
-        desc=context_data["desc"],
-        custom_prompt=context_data["custom_prompt"],
-        faq_context=faq_context,
-        doc_context=doc_context,
-    )
-
-    estimated_tokens = int(
-        (len(payload.question.split()) + len(answer.split())) * 1.3
-    )
-    record_tokens(estimated_tokens)
-
-    encrypted_q = encrypt_text(payload.question)
-    encrypted_a = encrypt_text(answer)
-    response_time_ms = int((time.time() - start_time) * 1000)
-
-    # ── 10. Phase C: Fast DB Write (Short-lived Session) ───────────────
-    await run_in_threadpool(
-        _save_chat_turn,
-        tenant_id=payload.tenant_id,
-        session_id=payload.session_id,
-        encrypted_q=encrypted_q,
-        encrypted_a=encrypted_a,
-        intent=intent,
-        page_url=payload.page_url,
-        language=payload.language,
-        is_resolved=False,
-        response_time_ms=response_time_ms,
+    return await ChatService.process_chat(
+        payload=payload,
         user_ip=user_ip,
-        lead_data=None,
+        background_tasks=background_tasks,
     )
-
-    background_tasks.add_task(check_and_alert)
-
-    return ChatResponse(answer=answer, intent=intent, resolved=False, sources=sources)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Secondary Endpoints (Offloaded to Worker Threadpool)
+# Secondary Endpoints (Offloaded to Service Layer & Worker Threadpool)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/chat/feedback")
@@ -399,44 +208,13 @@ async def chat_feedback_endpoint(
     request: Request,
     payload: FeedbackRequest
 ):
-    """Receives end-of-chat feedback from the widget.
-
-    Offloaded via run_in_threadpool to keep the event loop non-blocking.
-    """
-    def _record_feedback():
-        db = None
-        try:
-            db = get_tenant_session(payload.tenant_id)
-            existing = db.query(ChatFeedback).filter(
-                ChatFeedback.tenant_id == payload.tenant_id,
-                ChatFeedback.session_id == payload.session_id
-            ).first()
-            if existing:
-                existing.rating = payload.rating
-                existing.comment = payload.comment
-            else:
-                new_fb = ChatFeedback(
-                    tenant_id=payload.tenant_id,
-                    session_id=payload.session_id,
-                    rating=payload.rating,
-                    comment=payload.comment
-                )
-                db.add(new_fb)
-            db.commit()
-            return {"status": "success", "message": "Feedback recorded."}
-        except Exception as e:
-            if db:
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-            logger.error(f"[chat feedback] Failed to record feedback for tenant {payload.tenant_id}: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-        finally:
-            if db:
-                db.close()
-
-    return await run_in_threadpool(_record_feedback)
+    """Receives end-of-chat feedback from the widget."""
+    return await ChatService.record_feedback(
+        tenant_id=payload.tenant_id,
+        session_id=payload.session_id,
+        rating=payload.rating,
+        comment=payload.comment,
+    )
 
 
 @router.get("/chat/config")
@@ -445,39 +223,5 @@ async def chat_config_endpoint(
     request: Request,
     tenant_id: str
 ):
-    """Public endpoint to fetch widget UI configuration (company name, logo, greeting).
-
-    Offloaded via run_in_threadpool. Always returns 200 so widget never breaks.
-    """
-    def _fetch_config():
-        _default = {
-            "company_name": "MANAS BOT",
-            "logo_url": "",
-            "chatbot_greeting_message": "Hi! How can I help you today?",
-            "brand_color_primary": "",
-            "brand_color_secondary": ""
-        }
-        db = None
-        try:
-            db = get_tenant_session(tenant_id)
-            profile = db.query(BusinessProfile).filter(BusinessProfile.tenant_id == tenant_id).first()
-            if profile:
-                return {
-                    "company_name": profile.company_name or _default["company_name"],
-                    "logo_url": profile.logo_url or "",
-                    "chatbot_greeting_message": profile.chatbot_greeting_message or _default["chatbot_greeting_message"],
-                    "brand_color_primary": profile.brand_color_primary or "",
-                    "brand_color_secondary": profile.brand_color_secondary or ""
-                }
-            return _default
-        except Exception as e:
-            logger.warning(f"[chat config] Could not load config for tenant {tenant_id}: {e}")
-            return _default
-        finally:
-            if db:
-                try:
-                    db.close()
-                except Exception:
-                    pass
-
-    return await run_in_threadpool(_fetch_config)
+    """Public endpoint to fetch widget UI configuration (company name, logo, greeting)."""
+    return await ChatService.get_widget_config(tenant_id=tenant_id)
