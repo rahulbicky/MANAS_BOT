@@ -14,6 +14,7 @@ import time
 import asyncio
 import hashlib
 import logging
+import threading
 from typing import Optional, Dict
 from contextlib import asynccontextmanager
 
@@ -36,9 +37,6 @@ def session_to_advisory_lock_id(tenant_id: str, session_id: str) -> int:
     key = f"{tenant_id}:{session_id}".encode("utf-8")
     digest = hashlib.sha256(key).digest()
     return int.from_bytes(digest[:8], byteorder="big", signed=True)
-
-
-import threading
 
 class _AsyncGlobalLockAdapter:
     """Provides backward-compatible async and sync context manager interface for internal lock."""
@@ -157,11 +155,13 @@ async def session_lock(
         locked = False
 
         try:
-            conn = engine.connect()
+            conn = await run_in_threadpool(engine.connect)
             while time.monotonic() - start_time < timeout:
-                result = conn.execute(
-                    text("SELECT pg_try_advisory_lock(:id)"), {"id": lock_id}
-                ).scalar()
+                result = await run_in_threadpool(
+                    lambda: conn.execute(
+                        text("SELECT pg_try_advisory_lock(:id)"), {"id": lock_id}
+                    ).scalar()
+                )
                 if result:
                     locked = True
                     break
@@ -178,15 +178,17 @@ async def session_lock(
         finally:
             if conn and locked:
                 try:
-                    conn.execute(
-                        text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id}
+                    await run_in_threadpool(
+                        lambda: conn.execute(
+                            text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id}
+                        )
                     )
                     logger.debug(f"[session_lock] Released PG advisory lock for {key}")
                 except Exception as unlock_err:
                     logger.warning(f"[session_lock] Error unlocking {key}: {unlock_err}")
             if conn:
                 try:
-                    conn.close()
+                    await run_in_threadpool(conn.close)
                 except Exception:
                     pass
     else:

@@ -16,7 +16,6 @@ from typing import List
 import PyPDF2
 import pandas as pd
 import httpx
-from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -28,7 +27,7 @@ from ..deps import get_tenant_db
 from ....database import KnowledgeDocument, DocumentChunk, get_tenant_limits
 from ...schemas.models import DocumentResponse
 from ...utils.formatters import format_utc
-from ...utils.security_validation import validate_public_url
+from ...utils.security_validation import validate_public_url, clean_html_text, safe_http_get_async
 from ...core.security import require_tenant_or_role
 from ....rag import ingest_document, reingest_document, delete_document_chunks
 
@@ -46,27 +45,15 @@ class AddUrlRequest(BaseModel):
 
 def _clean_html_text(html_content: str) -> str:
     """Parse and clean HTML content in a worker thread."""
-    soup = BeautifulSoup(html_content, "html.parser")
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
-        tag.decompose()
-    text = soup.get_text(separator="\n", strip=True)
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return "\n".join(lines)
+    return clean_html_text(html_content)
 
 
 async def _scrape_url(url: str) -> str:
-    """Asynchronously fetch and parse content from a URL using httpx.AsyncClient.
-    Enforces SSRF protection before initiating network connection.
-    """
+    """Asynchronously fetch and parse content from a URL using SSRF-safe redirect checks."""
     try:
-        url = validate_public_url(url)
+        response = await safe_http_get_async(url, timeout=15.0)
     except ValueError as val_err:
         raise HTTPException(status_code=400, detail=str(val_err))
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            response = await client.get(url, headers={"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"})
-            response.raise_for_status()
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=400, detail=f"URL returned HTTP {e.response.status_code}: {url}")
     except httpx.RequestError as e:

@@ -2,6 +2,7 @@
 notifications.py - Simple email notifications for payment reminders.
 Minimal implementation using existing SMTP settings.
 """
+import html
 import smtplib
 import datetime
 from email.mime.text import MIMEText
@@ -28,18 +29,20 @@ def send_payment_reminder(client_email: str, client_name: str, amount_due: float
         msg["From"] = SMTP_EMAIL
         msg["To"] = client_email
 
-        html = f"""
+        safe_name = html.escape(str(client_name or "Client"))
+        safe_due = html.escape(str(due_date or ""))
+        html_body = f"""
         <html><body style="font-family:Arial,sans-serif;padding:20px;">
         <h3>Payment Reminder</h3>
-        <p>Dear {client_name},</p>
-        <p>This is a friendly reminder that your payment of <strong>₹{amount_due}</strong> is due on <strong>{due_date}</strong>.</p>
+        <p>Dear {safe_name},</p>
+        <p>This is a friendly reminder that your payment of <strong>₹{amount_due}</strong> is due on <strong>{safe_due}</strong>.</p>
         <p>Please contact us if you have any questions.</p>
         <p style="color:#666;font-size:12px;margin-top:20px;">
             Sent by ManasBot
         </p>
         </body></html>
         """
-        msg.attach(MIMEText(html, "html"))
+        msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
@@ -63,18 +66,20 @@ def send_expiry_reminder(client_email: str, client_name: str, expiry_date: str, 
         msg["From"] = SMTP_EMAIL
         msg["To"] = client_email
 
-        html = f"""
+        safe_name = html.escape(str(client_name or "Client"))
+        safe_exp = html.escape(str(expiry_date or ""))
+        html_body = f"""
         <html><body style="font-family:Arial,sans-serif;padding:20px;">
         <h3>Subscription Expiry Alert</h3>
-        <p>Dear {client_name},</p>
-        <p>Your chatbot subscription will expire in <strong>{days_left} days</strong> on <strong>{expiry_date}</strong>.</p>
+        <p>Dear {safe_name},</p>
+        <p>Your chatbot subscription will expire in <strong>{days_left} days</strong> on <strong>{safe_exp}</strong>.</p>
         <p>Please renew your subscription to continue uninterrupted service.</p>
         <p style="color:#666;font-size:12px;margin-top:20px;">
             Sent by ManasBot
         </p>
         </body></html>
         """
-        msg.attach(MIMEText(html, "html"))
+        msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()

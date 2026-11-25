@@ -29,7 +29,7 @@ router = APIRouter(prefix="/admin", tags=["Tenants"])
 
 
 def _build_tenant_response(t: dict) -> TenantResponse:
-    """Convert a raw tenant dict to a TenantResponse schema."""
+    """Convert a raw tenant dict to a TenantResponse schema (reuses pre-loaded limits to avoid N+1 queries)."""
     return TenantResponse(
         id=t["id"],
         name=t["name"],
@@ -42,7 +42,7 @@ def _build_tenant_response(t: dict) -> TenantResponse:
         subscription_end_date=str(t.get("subscription_end_date")),
         deactivated_at=str(t.get("deactivated_at")) if t.get("deactivated_at") else None,
         current_plan=t.get("current_plan", "Starter"),
-        limits=get_tenant_limits(t["id"]),
+        limits=t.get("limits") or get_tenant_limits(t["id"]),
         notification_email=t.get("notification_email", ""),
         conversation_retention_days=t.get("conversation_retention_days", 0),
     )

@@ -9,6 +9,7 @@ Routes:
   PUT    /admin/incidents/{id}       — seller updates status + response
   DELETE /admin/incidents/{id}       — seller permanently deletes an incident
 """
+import html
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -69,6 +70,12 @@ def _notify_seller_new_incident(incident: dict, tenant_name: str):
         "medium": "#f59e0b",   "low":  "#10b981"
     }.get(incident["severity"], "#6b7280")
 
+    safe_tenant_name = html.escape(str(tenant_name or "Unknown"))
+    safe_title = html.escape(str(incident.get("title", "")))
+    safe_cat = html.escape(str(incident.get("category", "")).replace("_", " ").title())
+    safe_sev = html.escape(str(incident.get("severity", "")).upper())
+    safe_desc = html.escape(str(incident.get("description", "")))
+
     body = f"""
     <html><body style="font-family:Arial,sans-serif;padding:20px;background:#f9fafb;">
     <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:12px;border:1px solid #e5e7eb;">
@@ -76,15 +83,15 @@ def _notify_seller_new_incident(incident: dict, tenant_name: str):
         <p style="color:#6b7280;">A client has opened a new support incident.</p>
         <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
             <tr><td style="padding:8px;font-weight:600;color:#374151;width:140px;">Client</td>
-                <td style="padding:8px;color:#1f2937;">{tenant_name}</td></tr>
+                <td style="padding:8px;color:#1f2937;">{safe_tenant_name}</td></tr>
             <tr style="background:#f9fafb;"><td style="padding:8px;font-weight:600;color:#374151;">Title</td>
-                <td style="padding:8px;color:#1f2937;">{incident['title']}</td></tr>
+                <td style="padding:8px;color:#1f2937;">{safe_title}</td></tr>
             <tr><td style="padding:8px;font-weight:600;color:#374151;">Category</td>
-                <td style="padding:8px;color:#1f2937;">{incident['category'].replace('_',' ').title()}</td></tr>
+                <td style="padding:8px;color:#1f2937;">{safe_cat}</td></tr>
             <tr style="background:#f9fafb;"><td style="padding:8px;font-weight:600;color:#374151;">Severity</td>
-                <td style="padding:8px;"><span style="color:{severity_color};font-weight:700;">{incident['severity'].upper()}</span></td></tr>
+                <td style="padding:8px;"><span style="color:{severity_color};font-weight:700;">{safe_sev}</span></td></tr>
             <tr><td style="padding:8px;font-weight:600;color:#374151;vertical-align:top;">Description</td>
-                <td style="padding:8px;color:#1f2937;">{incident['description']}</td></tr>
+                <td style="padding:8px;color:#1f2937;">{safe_desc}</td></tr>
         </table>
         <p style="margin-top:1.5rem;color:#9ca3af;font-size:12px;">
             Log in to your Seller Admin Panel to respond to this incident.
@@ -104,24 +111,29 @@ def _notify_client_incident_update(incident: dict, client_email: str, client_nam
         "resolved": "#10b981", "closed": "#6b7280"
     }.get(incident["status"], "#6b7280")
 
+    safe_client_name = html.escape(str(client_name or "Client"))
+    safe_title = html.escape(str(incident.get("title", "")))
+    safe_status_label = html.escape(status_label)
+    safe_response = html.escape(str(incident.get("seller_response") or ""))
+
     response_block = ""
-    if incident.get("seller_response"):
+    if safe_response:
         response_block = f"""
         <div style="background:#f0fdf4;border-left:4px solid #10b981;padding:1rem;border-radius:0 8px 8px 0;margin-top:1rem;">
             <strong style="color:#065f46;">Response from Support Team:</strong>
-            <p style="color:#1f2937;margin-top:0.5rem;">{incident['seller_response']}</p>
+            <p style="color:#1f2937;margin-top:0.5rem;">{safe_response}</p>
         </div>"""
 
     body = f"""
     <html><body style="font-family:Arial,sans-serif;padding:20px;background:#f9fafb;">
     <div style="max-width:600px;margin:0 auto;background:#fff;padding:30px;border-radius:12px;border:1px solid #e5e7eb;">
         <h2 style="color:#1f2937;">Your Incident Has Been Updated</h2>
-        <p style="color:#6b7280;">Dear {client_name}, your support incident has been updated.</p>
+        <p style="color:#6b7280;">Dear {safe_client_name}, your support incident has been updated.</p>
         <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
             <tr><td style="padding:8px;font-weight:600;color:#374151;width:120px;">Title</td>
-                <td style="padding:8px;color:#1f2937;">{incident['title']}</td></tr>
+                <td style="padding:8px;color:#1f2937;">{safe_title}</td></tr>
             <tr style="background:#f9fafb;"><td style="padding:8px;font-weight:600;color:#374151;">Status</td>
-                <td style="padding:8px;"><span style="color:{status_color};font-weight:700;">{status_label}</span></td></tr>
+                <td style="padding:8px;"><span style="color:{status_color};font-weight:700;">{safe_status_label}</span></td></tr>
         </table>
         {response_block}
         <p style="margin-top:1.5rem;color:#9ca3af;font-size:12px;">

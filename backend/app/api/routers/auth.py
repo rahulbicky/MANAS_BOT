@@ -68,8 +68,9 @@ async def resolve_username(payload: ResolveUsernameRequest):
 
 
 @router.post("/change-password")
-async def change_client_password(payload: ChangePasswordRequest):
-    """Allow a client to change their admin password."""
+@limiter.limit("5/minute")
+async def change_client_password(request: Request, payload: ChangePasswordRequest):
+    """Allow a client to change their admin password (rate-limited)."""
     if not verify_client_password(payload.tenant_id, payload.old_password):
         raise HTTPException(status_code=401, detail="Current password is incorrect.")
     if len(payload.new_password) < 4:

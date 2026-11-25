@@ -143,6 +143,47 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("<script>", result["question"])
         self.assertIn("&lt;script&gt;", result["question"])
 
+    async def test_07_ssrf_redirect_to_internal_metadata_blocked(self):
+        """Verify HTTP 302 redirects pointing to internal/metadata IPs are blocked before following."""
+        from unittest.mock import MagicMock, AsyncMock
+        from backend.app.utils.security_validation import safe_http_get_async
+
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 302
+        redirect_resp.headers = {"location": "http://169.254.169.254/latest/meta-data/"}
+
+        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=redirect_resp)):
+            with self.assertRaises(ValueError) as ctx:
+                await safe_http_get_async("https://example.com/start-redirect")
+            self.assertIn("forbidden", str(ctx.exception).lower())
+
+    def test_08_role_change_revokes_token_in_get_tenant_db(self):
+        """Verify get_tenant_db rejects employee JWT issued prior to role_changed_at."""
+        import datetime
+        from fastapi import HTTPException
+        from starlette.requests import Request
+        from backend.app.core.security import get_tenant_db
+
+        token = create_employee_token(
+            employee_id="emp_revoked_01",
+            email="emp@example.com",
+            role="admin",
+        )
+        req = Request({
+            "type": "http",
+            "method": "GET",
+            "path": "/admin/docs",
+            "headers": [(b"authorization", f"Bearer {token}".encode("utf-8"))],
+        })
+        future_change = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=5)).isoformat()
+
+        with patch("backend.app.core.security.get_tenant_by_id", return_value={"id": "t1", "api_key": "k1", "is_active": True}), \
+             patch("backend.app.core.security.get_employee_by_id", return_value={"id": "emp_revoked_01", "role": "viewer", "is_active": True, "role_changed_at": future_change}):
+            gen = get_tenant_db(request=req, tenant_id="t1", x_auth_token=None)
+            with self.assertRaises(HTTPException) as ctx:
+                next(gen)
+            self.assertEqual(ctx.exception.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()

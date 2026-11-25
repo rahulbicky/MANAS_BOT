@@ -170,6 +170,17 @@ class ChatService:
             "desc": context_data["desc"],
             "custom_prompt": context_data["custom_prompt"],
             "faqs": context_data["faqs"],
+            # Explicit per-turn reset prevents checkpoint carryover across turns
+            "intent": "",
+            "lead_data": None,
+            "is_pure_lead": False,
+            "faq_context": "",
+            "retrieved_chunks": [],
+            "doc_context": "",
+            "sources": [],
+            "answer": "",
+            "is_resolved": False,
+            "error": None,
         }
 
         thread_id = f"{payload.tenant_id}:{payload.session_id}"

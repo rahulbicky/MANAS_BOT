@@ -12,6 +12,7 @@ Features:
   - Automatic idempotent table schema creation
   - Graceful fallback to MemorySaver if database is unreachable or SQLite is active
 """
+import os
 import sys
 import logging
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
@@ -48,12 +49,22 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 logger = logging.getLogger(__name__)
 
+_ALLOWED_MSGPACK_MODULES = [("backend.rag.retriever", "RetrievedChunk")]
+
+
+def _default_serializer() -> JsonPlusSerializer:
+    """Create JsonPlusSerializer permitting ManasBot's RetrievedChunk dataclass."""
+    try:
+        return JsonPlusSerializer(allowed_msgpack_modules=_ALLOWED_MSGPACK_MODULES)
+    except TypeError:
+        return JsonPlusSerializer()
+
 
 class PostgresCheckpointSaver(BaseCheckpointSaver[str]):
     """Production-grade PostgreSQL checkpoint saver for LangGraph."""
 
     def __init__(self, engine: Engine, serde: Optional[Any] = None) -> None:
-        super().__init__(serde=serde or JsonPlusSerializer())
+        super().__init__(serde=serde or _default_serializer())
         self.engine = engine
         self._ensure_tables_exist()
 
@@ -410,6 +421,7 @@ class PostgresCheckpointSaver(BaseCheckpointSaver[str]):
         config: RunnableConfig,
         writes: Sequence[Tuple[str, Any]],
         task_id: str,
+        task_path: str = "",
     ) -> None:
         """Store pending intermediate writes from tasks."""
         thread_id: str = config["configurable"]["thread_id"]
@@ -476,29 +488,49 @@ class PostgresCheckpointSaver(BaseCheckpointSaver[str]):
         config: RunnableConfig,
         writes: Sequence[Tuple[str, Any]],
         task_id: str,
+        task_path: str = "",
     ) -> None:
-        await run_in_threadpool(self.put_writes, config, writes, task_id)
+        await run_in_threadpool(self.put_writes, config, writes, task_id, task_path)
 
 
 # Alias for backward compatibility with LangGraph naming convention
 AsyncPostgresSaver = PostgresCheckpointSaver
 
 
+def _build_memory_saver() -> MemorySaver:
+    """Instantiate MemorySaver with project serializer configuration."""
+    try:
+        return MemorySaver(serde=_default_serializer())
+    except TypeError:
+        return MemorySaver()
+
+
 def get_checkpointer(engine: Optional[Engine] = None) -> BaseCheckpointSaver:
     """Factory creating a production-appropriate checkpointer with resilient fallback.
 
+    Respects CHAT_CHECKPOINTER_BACKEND ('auto', 'postgres', 'memory').
     If a valid PostgreSQL engine is available, returns PostgresCheckpointSaver.
-    If database connectivity fails or SQLite is used, logs a warning and returns MemorySaver.
+    If database connectivity fails or SQLite is used in auto mode, logs a notice and returns MemorySaver.
     """
+    backend_pref = os.getenv("CHAT_CHECKPOINTER_BACKEND", "auto").strip().lower()
+    if backend_pref == "memory":
+        logger.info("[checkpointer] CHAT_CHECKPOINTER_BACKEND=memory; using MemorySaver.")
+        return _build_memory_saver()
+
     if engine is None:
         try:
             from ..database import _get_central_engine
             engine = _get_central_engine()
         except Exception as e:
             logger.warning(f"[checkpointer] Could not retrieve central engine: {e}. Falling back to MemorySaver.")
-            return MemorySaver()
+            return _build_memory_saver()
 
     try:
+        dialect_name = getattr(getattr(engine, "dialect", None), "name", "")
+        if dialect_name == "sqlite" and backend_pref != "postgres":
+            logger.info("[checkpointer] SQLite backend active in auto mode; using MemorySaver.")
+            return _build_memory_saver()
+
         # Test basic engine responsiveness
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -507,4 +539,4 @@ def get_checkpointer(engine: Optional[Engine] = None) -> BaseCheckpointSaver:
         logger.warning(
             f"[checkpointer] PostgreSQL connection check failed ({ex}). Gracefully falling back to MemorySaver."
         )
-        return MemorySaver()
+        return _build_memory_saver()

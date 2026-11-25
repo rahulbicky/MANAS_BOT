@@ -179,6 +179,30 @@
     let customGreeting = 'Connected to secure chat. How can we help?';
     let lastBotMsg = '';
 
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+    }
+
+    function sanitizeRenderedHTML(rawHtml) {
+        const temp = document.createElement('div');
+        temp.innerHTML = rawHtml;
+        temp.querySelectorAll('script, iframe, object, embed, style, link').forEach(el => el.remove());
+        temp.querySelectorAll('*').forEach(el => {
+            for (const attr of Array.from(el.attributes)) {
+                const name = attr.name.toLowerCase();
+                const val = (attr.value || '').trim().toLowerCase();
+                if (name.startsWith('on')) el.removeAttribute(attr.name);
+                if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) el.removeAttribute(attr.name);
+            }
+        });
+        return temp.innerHTML;
+    }
+
+    function isSafeColor(c) {
+        return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c.trim());
+    }
+
     // Inactivity timer – triggers feedback after 5 minutes of no user messages
     const INACTIVITY_MS = 5 * 60 * 1000;
     let inactivityTimer = null;
@@ -203,10 +227,10 @@
             if (!data) return;
             if (data.company_name) titleEl.textContent = data.company_name + ' Support';
             if (data.chatbot_greeting_message) customGreeting = data.chatbot_greeting_message;
-            if (data.brand_color_primary) {
+            if (data.brand_color_primary && isSafeColor(data.brand_color_primary)) {
                 const root = document.documentElement;
-                const primary = data.brand_color_primary;
-                const secondary = data.brand_color_secondary || primary;
+                const primary = data.brand_color_primary.trim();
+                const secondary = (data.brand_color_secondary && isSafeColor(data.brand_color_secondary)) ? data.brand_color_secondary.trim() : primary;
                 root.style.setProperty('--cb-primary', primary);
                 root.style.setProperty('--cb-secondary', secondary);
                 root.style.setProperty('--cb-primary-dark', secondary);
@@ -303,7 +327,15 @@
 
         const div = document.createElement('div');
         div.className = `cb-msg cb-${sender}`;
-        div.innerHTML = (sender === 'bot' && typeof marked !== 'undefined') ? marked.parse(text) : (sender === 'system' ? text : `<p>${text}</p>`);
+        if (sender === 'bot' && typeof marked !== 'undefined') {
+            div.innerHTML = sanitizeRenderedHTML(marked.parse(text));
+        } else if (sender === 'system') {
+            div.textContent = text;
+        } else {
+            const p = document.createElement('p');
+            p.textContent = text;
+            div.appendChild(p);
+        }
 
         if (sender === 'bot' && sources && Array.isArray(sources) && sources.length > 0) {
             const sourcesDiv = document.createElement('div');

@@ -8,7 +8,9 @@ Security validation utilities for ManasBot:
 import ipaddress
 import logging
 import socket
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
+from bs4 import BeautifulSoup
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +111,58 @@ def is_safe_public_url(url: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def clean_html_text(html_content: str) -> str:
+    """Parse HTML and extract clean, visible text lines."""
+    soup = BeautifulSoup(html_content, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n", strip=True)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return "\n".join(lines)
+
+
+_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+
+
+async def safe_http_get_async(url: str, max_redirects: int = 5, timeout: float = 15.0) -> httpx.Response:
+    """Perform an async HTTP GET request validating every redirect target against SSRF rules."""
+    current_url = validate_public_url(url)
+    headers = {"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"}
+
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        for _ in range(max_redirects + 1):
+            response = await client.get(current_url, headers=headers)
+            if response.status_code in _REDIRECT_STATUSES:
+                location = response.headers.get("location")
+                if not location:
+                    break
+                next_url = urljoin(current_url, location)
+                current_url = validate_public_url(next_url)
+                continue
+            response.raise_for_status()
+            return response
+
+    raise ValueError("Too many HTTP redirects while fetching URL.")
+
+
+def safe_http_get_sync(url: str, max_redirects: int = 5, timeout: float = 15.0) -> httpx.Response:
+    """Perform a sync HTTP GET request validating every redirect target against SSRF rules."""
+    current_url = validate_public_url(url)
+    headers = {"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"}
+
+    with httpx.Client(timeout=timeout, follow_redirects=False) as client:
+        for _ in range(max_redirects + 1):
+            response = client.get(current_url, headers=headers)
+            if response.status_code in _REDIRECT_STATUSES:
+                location = response.headers.get("location")
+                if not location:
+                    break
+                next_url = urljoin(current_url, location)
+                current_url = validate_public_url(next_url)
+                continue
+            response.raise_for_status()
+            return response
+
+    raise ValueError("Too many HTTP redirects while fetching URL.")

@@ -15,6 +15,7 @@
   <a href="#key-features"><img src="https://img.shields.io/badge/FastEmbed-Multilingual%20E5-FF6F00?style=flat-square" alt="FastEmbed" /></a>
   <a href="#key-features"><img src="https://img.shields.io/badge/Groq%20Cloud-Ultra--Fast%20LLM-F55036?style=flat-square" alt="Groq" /></a>
   <a href="#key-features"><img src="https://img.shields.io/badge/LangChain-Orchestration-1C3C3C?style=flat-square" alt="LangChain" /></a>
+  <a href="#langgraph-integration--multi-agent-workflow"><img src="https://img.shields.io/badge/LangGraph-Stateful%20Workflow-7C3AED?style=flat-square" alt="LangGraph" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" /></a>
 </p>
 
@@ -25,6 +26,7 @@
 - [What is ManasBot?](#what-is-manasbot)
 - [Key Features](#key-features)
 - [System Architecture](#system-architecture)
+- [LangGraph Integration – Multi-Agent Workflow](#langgraph-integration--multi-agent-workflow)
 - [How ManasBot Works](#how-manasbot-works)
 - [Application Screenshots](#application-screenshots)
 - [Technology Stack](#technology-stack)
@@ -150,14 +152,15 @@ flowchart TD
     end
 
     %% ==========================================
-    %% 4. AI & RAG ENGINE (GREEN)
+    %% 4. AI, LANGGRAPH & RAG ENGINE (GREEN)
     %% ==========================================
-    subgraph LayerAI [" 🧠 4. AI and Advanced RAG Pipeline (Green) "]
-        DocExtractor("<b>📄 Multi-Format Text Extractor</b><br/>PDF, DOCX, XLSX, CSV and Web HTML")
+    subgraph LayerAI [" 🧠 4. LangGraph Workflow and Advanced RAG Pipeline (Green) "]
+        DocExtractor("<b>📄 Multi-Format Text Extractor</b><br/>PyPDF2, DOCX, XLSX, CSV and Web HTML")
         TextChunker("<b>✂️ Recursive Text Chunker</b><br/>600-Char Segments with 100-Char Overlap")
         FastEmbedEngine("<b>🧠 FastEmbed ONNX Engine (CPU)</b><br/>multilingual-e5-small, 384 Dimensions")
-        VectorRetriever("<b>🔍 Semantic Vector Retriever</b><br/>Cosine Distance Matching and Threshold Filtering")
-        PromptBuilder("<b>🎯 Anti-Hallucination Prompt Engine</b><br/>Context Assembly and Citation Guardrails")
+        LangGraphEngine("<b>🕸️ LangGraph StateGraph Workflow</b><br/>guard_and_intent → router_lead_or_inquiry → RAG/Lead Nodes")
+        VectorRetriever("<b>🔍 Semantic Vector Retriever</b><br/>Cosine Distance Matching and Reranking")
+        PromptBuilder("<b>🎯 Anti-Hallucination Prompt Engine</b><br/>Shared Context Assembly and Citation Guardrails")
     end
 
     %% ==========================================
@@ -165,6 +168,7 @@ flowchart TD
     %% ==========================================
     subgraph LayerDatabase [" 🗄️ 5. Database and Vector Storage (Orange) "]
         PgVectorTable[("<b>📦 document_chunks Table</b><br/>pgvector HNSW Cosine Index")]
+        CheckpointDB[("<b>💾 LangGraph Checkpointer</b><br/>PostgreSQL Saver / MemorySaver Fallback")]
         RelationalDB[("<b>🗄️ Relational Database Tables</b><br/>tenants, plans, leads, faqs, chat_logs_v2")]
     end
 
@@ -191,7 +195,7 @@ flowchart TD
     AuthManager --> FastAPICore
     FastAPICore --> DocsRouter
     FastAPICore --> LeadsRouter
-    Scheduler -.->|Periodic URL update| DocsRouter
+    Scheduler -.->|Periodic URL re-scrape & re-embed| DocsRouter
 
     %% Document Processing & Vector Storage
     DocsRouter --> DocExtractor
@@ -199,17 +203,20 @@ flowchart TD
     TextChunker --> FastEmbedEngine
     FastEmbedEngine -->|Store passage vectors| PgVectorTable
 
-    %% Decoupled Chat RAG Flow
-    ChatRouter -->|Phase A: Verify quotas and fetch profile| RelationalDB
-    ChatRouter -->|Phase B: Compute query vector| FastEmbedEngine
+    %% Decoupled Chat RAG & LangGraph Flow
+    ChatRouter -->|Phase A: Verify quotas, profile, history| RelationalDB
+    ChatRouter -->|Phase B: Invoke ConversationState| LangGraphEngine
+    LangGraphEngine <-->|Persist/Load thread checkpoints| CheckpointDB
+    LangGraphEngine -->|Compute query vector| FastEmbedEngine
     FastEmbedEngine -->|384d query vector| VectorRetriever
-    PgVectorTable -->|Top-5 matching chunks| VectorRetriever
+    PgVectorTable -->|Top-K matching chunks| VectorRetriever
     VectorRetriever --> PromptBuilder
     PromptBuilder -->|Strict prompt + context| GroqLLM
 
     %% Response Delivery & Log Persistence
-    GroqLLM -->|Grounded response| ChatRouter
-    ChatRouter -->|Phase C: Encrypt and persist logs| DataEncryptor
+    GroqLLM -->|Grounded response| LangGraphEngine
+    LangGraphEngine -->|Answer, intent & sources| ChatRouter
+    ChatRouter -->|Phase C: Encrypt and persist logs/leads| DataEncryptor
     DataEncryptor --> RelationalDB
     ChatRouter -.->|Customer lead captured event| SMTPService
     ChatRouter -->|Grounded answer + source citations| UserWidget
@@ -228,8 +235,8 @@ flowchart TD
     class UserWidget,ClientPortal,SuperPortal frontend;
     class RateLimiter,AuthManager,DataEncryptor security;
     class FastAPICore,ChatRouter,DocsRouter,LeadsRouter,Scheduler backend;
-    class DocExtractor,TextChunker,FastEmbedEngine,VectorRetriever,PromptBuilder ai;
-    class PgVectorTable,RelationalDB database;
+    class DocExtractor,TextChunker,FastEmbedEngine,LangGraphEngine,VectorRetriever,PromptBuilder ai;
+    class PgVectorTable,CheckpointDB,RelationalDB database;
     class GroqLLM,SMTPService external;
 ```
 
@@ -251,6 +258,75 @@ flowchart TD
   3. *Phase C (Write):* Saves encrypted chat logs, updates monthly token usage, and persists captured customer leads.
 - **Local Embedding Computation:** Embeddings run in-process on CPU via ONNX Runtime, eliminating recurring vector API costs.
 - **Resilient Multi-Model Groq Fallback:** Automatically tries fast secondary LLMs if the primary model encounters rate limits or service interruptions.
+
+---
+
+## LangGraph Integration – Multi-Agent Workflow
+
+ManasBot uses **LangGraph** (`backend/rag/graph.py` and `backend/rag/checkpointer.py`) inside Phase B of the chat pipeline to run a structured, stateful, multi-turn conversational workflow while holding zero database connections open during LLM inference.
+
+### 1. Why LangGraph Was Added
+Before LangGraph, chat execution ran as sequential procedural steps inside the API layer. Adding LangGraph provides:
+- **Explicit workflow orchestration:** Every stage (sanitization, lead detection, intent routing, FAQ lookup, semantic RAG retrieval, answer generation, and citation formatting) is an isolated graph node.
+- **Conditional branching:** Pure lead submissions bypass expensive RAG and LLM calls, while combined lead + inquiry messages capture the lead *and* continue to knowledge retrieval.
+- **Persistent thread state:** Conversations can persist checkpoints across requests and server restarts via PostgreSQL, with safe per-turn reset of transient fields so prior turns never leak into new questions.
+
+### 2. How the Workflow Works
+1. **Phase A (Database Read):** `ChatService._process_chat_inner` validates quotas/language gates, loads tenant FAQs and business profile via `TenantRepository`, and decrypts recent turn history (`HISTORY_WINDOW_TURNS`) via `ChatRepository`.
+2. **Phase B (LangGraph Execution):** `run_chat_graph` invokes `compiled_chat_graph` using composite thread ID `{tenant_id}:{session_id}`. All nodes operate without holding open ORM connections.
+3. **Phase C (Database Write):** `ChatService` encrypts the user question and generated answer with Fernet, saves `ChatLog` (and any captured `Lead`) atomically, and schedules background email/alert tasks.
+
+### 3. Workflow Diagram & Nodes and Edges
+
+```mermaid
+flowchart LR
+    START([START]) --> Guard["guard_and_intent_node"]
+    Guard -->|"router_lead_or_inquiry:<br/>is_pure_lead == True"| Lead["lead_capture_node"]
+    Guard -->|"router_lead_or_inquiry:<br/>Inquiry present"| FAQ["faq_matcher_node"]
+    Lead --> Cite["citation_formatter_node"]
+    FAQ --> RAG["rag_retriever_node"]
+    RAG --> Answer["answer_generation_node"]
+    Answer --> Cite
+    Cite --> ENDNode([END])
+```
+
+Verified nodes in `build_chat_graph()` (`backend/rag/graph.py`):
+- **`guard_and_intent_node`**: HTML-escapes the incoming question, extracts contact details (`Name`, `Phone`, `Email`) via regex, classifies whether the message is a pure lead or also contains an inquiry, and runs async intent detection (`adetect_intent`).
+- **`lead_capture_node`**: Returns an immediate confirmation response (`intent="lead_captured"`) when no extra question was asked, avoiding unnecessary RAG/LLM latency.
+- **`faq_matcher_node`**: Filters tenant FAQs loaded in Phase A by the detected intent.
+- **`rag_retriever_node`**: Resolves ambiguous multi-turn follow-ups via `resolve_conversational_query`, runs semantic search (`aretrieve_relevant_chunks`) with E5 embeddings and reranking, and prepares `doc_context` and `sources`.
+- **`answer_generation_node`**: Builds the grounded system prompt (`build_rag_system_prompt`), injects decrypted multi-turn history, calls Groq models (`qwen/qwen3.8-27b` with fallback to `openai/gpt-oss-20b`), and prepends a lead acknowledgment when contact info accompanied a question.
+- **`citation_formatter_node`**: Finalizes `sources` and computes `is_resolved` before returning to `END`.
+
+*Note on Agentic Tools (`backend/rag/tools.py`):* ManasBot also defines four standalone tenant-scoped LangChain `StructuredTool` wrappers (`knowledge_retrieval`, `business_profile`, `lead_capture`, `support_incident`) exported via `get_tenant_agent_tools(tenant_id)`. These tools are modular and tested independently, while the production `/chat` endpoint executes the deterministic 6-node graph above.
+
+### 4. Supervisor Architecture vs Deterministic Conditional Routing
+ManasBot **does not use an LLM-driven Supervisor agent loop** inside the live `/chat` path. Instead, it uses a **deterministic conditional-routing Directed Acyclic Graph (DAG)** controlled by `router_lead_or_inquiry(state)`:
+- Prevents infinite agent loops, unpredictable tool recursion, and wasted LLM tokens.
+- Keeps response latency predictable for customer-facing web widgets.
+- Guarantees every request terminates cleanly at `END` after `citation_formatter_node`.
+
+### 5. StateGraph & State Management
+The workflow is built on `StateGraph(ConversationState)` (`TypedDict`, `total=False`) carrying:
+- **Inputs:** `question`, `session_id`, `tenant_id`, `language`, `page_url`
+- **Phase A Context:** `chat_history`, `monthly_messages`, `company`, `industry`, `desc`, `custom_prompt`, `faqs`
+- **Pipeline State:** `intent`, `lead_data`, `is_pure_lead`, `faq_context`, `retrieved_chunks` (serialized dicts), `doc_context`
+- **Outputs:** `sources`, `answer`, `is_resolved`, `error`
+
+Before every turn executes, `ChatService` and `run_chat_graph` explicitly reset per-turn transient keys (`intent`, `lead_data`, `is_pure_lead`, `faq_context`, `retrieved_chunks`, `doc_context`, `sources`, `answer`, `is_resolved`, `error`) so cached state from Turn 1 never leaks into Turn 2 on the same `thread_id`.
+
+### 6. Checkpointing Architecture
+Checkpointing is implemented in `backend/rag/checkpointer.py`:
+- **`PostgresCheckpointSaver` (aliased as `AsyncPostgresSaver`)**: Extends LangGraph's `BaseCheckpointSaver[str]` using SQLAlchemy tables (`langgraph_checkpoints`, `langgraph_checkpoint_blobs`, `langgraph_checkpoint_writes`) scoped strictly by `thread_id = f"{tenant_id}:{session_id}"`.
+- **Resilient Fallback (`get_checkpointer`)**: Supports `CHAT_CHECKPOINTER_BACKEND` (`auto`, `postgres`, `memory`), using `PostgresCheckpointSaver` for PostgreSQL and automatically falling back to `MemorySaver` in local SQLite/offline mode or if DB connectivity fails.
+- **Retention Pruning**: `RetentionService.execute_retention_cleanup` cleans expired tenant checkpoints, blobs, and writes matching `{tenant_id}:%`.
+
+### 7. LangChain vs LangGraph in ManasBot
+
+| Framework | Role in ManasBot | Actual Modules |
+|---|---|---|
+| **LangChain** | LLM wrappers (`ChatGroq`), message types (`SystemMessage`, `HumanMessage`, `AIMessage`), prompt templates, text splitters, and `StructuredTool` schemas | `backend/intent_chain.py`, `backend/faq_chain.py`, `backend/rag/chunker.py`, `backend/rag/tools.py` |
+| **LangGraph** | Stateful graph orchestration (`StateGraph`), conditional routing (`router_lead_or_inquiry`), multi-node execution flow, and PostgreSQL/`MemorySaver` thread checkpointing | `backend/rag/graph.py`, `backend/rag/checkpointer.py` |
 
 ---
 
@@ -357,14 +433,15 @@ flowchart TD
 | **Backend Framework** | **FastAPI** (Python 3.10+) | High-performance asynchronous REST API backend |
 | **Web Server** | **Uvicorn** | Production-grade ASGI web server |
 | **AI / LLM Cloud** | **Groq API** | Ultra-fast inference (`qwen/qwen3.8-27b`, `openai/gpt-oss-20b`) |
-| **Orchestration** | **LangChain** | Prompt templating and LLM chain invocation |
+| **Graph Orchestration** | **LangGraph (`langgraph`)** | Stateful multi-node workflow (`StateGraph`), conditional routing, and checkpoint persistence |
+| **LLM & Tool Layer** | **LangChain & LangChain-Groq** | `ChatGroq` model chains, message types, text splitters, and `StructuredTool` wrappers |
 | **Embedding Engine** | **FastEmbed** (ONNX Runtime) | Local CPU embeddings using `intfloat/multilingual-e5-small` |
 | **Vector Database** | **PostgreSQL + pgvector** | Vector similarity search with HNSW cosine distance indexing |
 | **ORM & Migrations** | **SQLAlchemy & Alembic** | Relational data models, session management, and schema migrations |
-| **Document Processing** | **pypdf, python-docx, openpyxl, pandas** | Text extraction from PDF, DOCX, Excel spreadsheets, and CSVs |
-| **Web Scraping** | **HTTPX & BeautifulSoup4** | Async web page fetching and HTML text extraction |
-| **Security & Auth** | **PyJWT & Passlib (bcrypt)** | Role-based JWT authentication and password hashing |
-| **Data Encryption** | **Cryptography (Fernet AES-128)** | Encryption of stored conversation logs and sensitive credentials |
+| **Document Processing** | **PyPDF2, python-docx, openpyxl, pandas** | Text extraction from PDF, DOCX, Excel spreadsheets, and CSVs |
+| **Web Scraping** | **HTTPX & BeautifulSoup4** | Async web page fetching (SSRF-validated) and HTML text extraction |
+| **Security & Auth** | **PyJWT & bcrypt** | Role-based JWT authentication and salted password hashing |
+| **Data Encryption** | **Cryptography (Fernet)** | Authenticated symmetric encryption of stored conversation logs |
 | **Task Scheduling** | **APScheduler** | Background automated URL re-scraping |
 | **Frontend UI** | **Vanilla JavaScript, HTML5, CSS3** | Lightweight portals and floating chat widget with zero heavy framework bloat |
 
@@ -380,19 +457,26 @@ MANAS_BOT/
 │   ├── app/                         # FastAPI modular application
 │   │   ├── api/                     # REST API route handlers
 │   │   │   └── routers/             # auth, chat, documents, leads, tenants, etc.
-│   │   ├── core/                    # Security, JWT tokens, config, rate limiter
+│   │   ├── core/                    # Security, JWT tokens, config, rate limiter, session_lock
+│   │   ├── repositories/            # Data access layer (chat_repo, tenant_repo)
 │   │   ├── schemas/                 # Pydantic request and response models
-│   │   └── scheduler.py             # Scheduled background website re-scraper
-│   ├── rag/                         # Advanced Retrieval-Augmented Generation module
+│   │   ├── services/                # ChatService (3-phase lifecycle) & RetentionService
+│   │   ├── utils/                   # Formatters & SSRF URL validation helpers
+│   │   └── scheduler.py             # Scheduled background URL re-scraper & re-indexer
+│   ├── rag/                         # LangGraph & Advanced RAG module
+│   │   ├── checkpointer.py          # PostgresCheckpointSaver & MemorySaver fallback
 │   │   ├── chunker.py               # Recursive text chunking with overlap
 │   │   ├── embedder.py              # FastEmbed CPU embedding engine (multilingual-e5)
-│   │   ├── ingestion.py             # File parsers (PDF, DOCX, CSV, Excel, URLs)
-│   │   ├── prompts.py               # Strict anti-hallucination prompt templates
-│   │   └── retriever.py             # pgvector similarity search & SQLite fallback
+│   │   ├── evaluation.py            # Retrieval benchmarking harness (Hit@K, MRR@K)
+│   │   ├── graph.py                 # LangGraph StateGraph & 6-node conversational workflow
+│   │   ├── ingestion.py             # Transactional document chunk/embedding ingestion
+│   │   ├── prompts.py               # Shared anti-hallucination prompt & context builders
+│   │   ├── retriever.py             # pgvector similarity search, reranking & SQLite fallback
+│   │   └── tools.py                 # Tenant-scoped LangChain StructuredTool wrappers
 │   ├── database.py                  # SQLAlchemy models and database sessions
-│   ├── encryption.py                # Fernet AES encryption utilities
+│   ├── encryption.py                # Fernet encryption utilities
 │   ├── email_notifier.py            # SMTP email alert dispatcher
-│   ├── faq_chain.py                 # Core RAG answering chain with Groq LLMs
+│   ├── faq_chain.py                 # Groq LLM answering chain
 │   ├── intent_chain.py              # Intent classification chain
 │   └── main.py                      # Main backend application entry point
 ├── docs/                            # Documentation assets
@@ -404,7 +488,11 @@ MANAS_BOT/
 ├── requirements.txt                 # Python package dependencies
 ├── run_server.py                    # Combined local server launcher (Backend + Frontend)
 ├── test_async_chat_performance.py   # Phase 1 backend stability test suite (19 tests)
+├── test_langgraph_chat.py           # LangGraph workflow & 3-phase lifecycle tests (16 tests)
 ├── test_phase2_rag.py               # Phase 2 advanced RAG test suite (23 tests)
+├── test_phase3_production.py        # Production reliability, locks & retention tests (17 tests)
+├── test_rag_benchmarking.py         # RAG evaluation & agentic tools tests (9 tests)
+├── test_security_hardening.py       # SSRF, RBAC, isolation & XSS tests (8 tests)
 └── README.md                        # Project documentation
 ```
 
@@ -518,7 +606,7 @@ Open your browser and navigate to the application URLs:
 - **Live Chatbot Widget Preview:** [http://127.0.0.1:8080/chatbot/](http://127.0.0.1:8080/chatbot/)
 
 ### 4. Running Automated Tests
-Run the complete automated regression and production test suite (**86 tests** passing across 6 test suites):
+Run the complete automated regression and production test suite (**92 tests** passing across 6 test suites):
 
 ```bash
 python test_phase2_rag.py ; python test_async_chat_performance.py ; python test_langgraph_chat.py ; python test_phase3_production.py ; python test_rag_benchmarking.py ; python test_security_hardening.py

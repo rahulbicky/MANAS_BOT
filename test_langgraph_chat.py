@@ -517,6 +517,95 @@ class LangGraphChatTestSuite(unittest.TestCase):
         data = resp.json()
         self.assertIn("detail", data)
 
+    def test_13_multiturn_checkpoint_resets_per_turn_intent(self):
+        """Verify Turn 1's intent in checkpointer does NOT bleed into Turn 2 on the same session_id."""
+        with patch("backend.app.api.routers.chat.adetect_intent", new=AsyncMock(side_effect=["pricing", "support"])) as mock_det, \
+             patch("backend.app.api.routers.chat.aget_answer", new=AsyncMock(return_value="Response ok.")):
+
+            r1 = self.client.post(
+                "/chat",
+                json={
+                    "question": "What are your prices?",
+                    "session_id": "sess_multiturn_isolation_01",
+                    "tenant_id": self.tenant_id,
+                    "language": "en",
+                },
+            )
+            self.assertEqual(r1.status_code, 200)
+            self.assertEqual(r1.json()["intent"], "pricing")
+
+            r2 = self.client.post(
+                "/chat",
+                json={
+                    "question": "How do I reset my password?",
+                    "session_id": "sess_multiturn_isolation_01",
+                    "tenant_id": self.tenant_id,
+                    "language": "en",
+                },
+            )
+            self.assertEqual(r2.status_code, 200)
+            self.assertEqual(r2.json()["intent"], "support")
+            self.assertEqual(mock_det.call_count, 2)
+
+    def test_14_rag_retriever_serializes_chunks_cleanly(self):
+        """Verify rag_retriever_node stores dict-serialized chunks for clean checkpoint persistence."""
+        from backend.rag.retriever import RetrievedChunk
+
+        real_chunk = RetrievedChunk(
+            chunk_id="c_serial_1",
+            document_id="doc_serial_1",
+            filename="guide.pdf",
+            chunk_text="Automated billing runs monthly.",
+            chunk_index=0,
+            similarity_score=0.91,
+        )
+        with patch("backend.rag.graph.aretrieve_relevant_chunks", new=AsyncMock(return_value=[real_chunk])):
+            out = asyncio.run(rag_retriever_node({"tenant_id": self.tenant_id, "question": "billing schedule"}))
+            self.assertIsInstance(out["retrieved_chunks"][0], dict)
+            self.assertEqual(out["retrieved_chunks"][0]["filename"], "guide.pdf")
+
+    def test_15_scheduler_reingests_updated_url_chunks(self):
+        """Verify scheduled 6h URL refresh updates document content AND triggers chunk re-ingestion."""
+        from backend.app.scheduler import _refresh_all_tenants_urls
+
+        session = db_mod._get_central_session()
+        try:
+            url_doc = KnowledgeDocument(
+                tenant_id=self.tenant_id,
+                filename="https://example.com/status",
+                content="Old content",
+                file_type="url",
+                is_active=True,
+            )
+            session.add(url_doc)
+            session.commit()
+            doc_id = url_doc.id
+        finally:
+            session.close()
+
+        mock_resp = MagicMock()
+        mock_resp.text = "<html><body><p>Updated live service policy content.</p></body></html>"
+        db_mod._invalidate_tenant_cache()
+
+        with patch("backend.app.utils.security_validation.is_safe_public_url", return_value=True), \
+             patch("backend.app.utils.security_validation.safe_http_get_sync", return_value=mock_resp), \
+             patch("backend.rag.reingest_document", return_value=1) as mock_reingest:
+            _refresh_all_tenants_urls()
+            self.assertGreaterEqual(mock_reingest.call_count, 1)
+            called_doc_ids = [c.kwargs.get("document_id") for c in mock_reingest.call_args_list]
+            self.assertIn(doc_id, called_doc_ids)
+
+    def test_16_list_tenants_avoids_n_plus_1_limit_queries(self):
+        """Verify _build_tenant_response uses preloaded limits instead of querying get_tenant_limits per row."""
+        from backend.app.api.routers.tenants import _build_tenant_response
+
+        tenant_dict = db_mod.get_all_tenants(use_cache=False)[0]
+        self.assertIn("limits", tenant_dict)
+        with patch("backend.app.api.routers.tenants.get_tenant_limits") as mock_limits:
+            resp = _build_tenant_response(tenant_dict)
+            mock_limits.assert_not_called()
+            self.assertIsNotNone(resp.limits)
+
 
 if __name__ == "__main__":
     unittest.main()

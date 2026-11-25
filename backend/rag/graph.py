@@ -37,7 +37,7 @@ from ..app.core.config import (
     CHAT_SIMILARITY_THRESHOLD,
 )
 from .retriever import aretrieve_relevant_chunks, RetrievedChunk
-from .prompts import format_rag_context
+from .prompts import format_rag_context, build_rag_system_prompt
 from ..intent_chain import adetect_intent as _original_adetect_intent, INTENT_MODELS, VALID_INTENTS
 from ..faq_chain import FAQ_MODELS, LANG_MAP, aget_answer as _original_aget_answer
 
@@ -306,8 +306,13 @@ async def rag_retriever_node(state: ConversationState) -> Dict[str, Any]:
         for c in retrieved_chunks
     ]
 
+    serialized_chunks = [
+        c.to_dict() if isinstance(c, RetrievedChunk) else c
+        for c in retrieved_chunks
+    ]
+
     return {
-        "retrieved_chunks": retrieved_chunks,
+        "retrieved_chunks": serialized_chunks,
         "doc_context": doc_context,
         "sources": sources,
     }
@@ -331,32 +336,16 @@ async def answer_generation_node(state: ConversationState) -> Dict[str, Any]:
     chat_history = state.get("chat_history", [])
     lead_data = state.get("lead_data")
 
-    # Build system instructions
-    if custom_prompt:
-        base_system = (
-            f"{custom_prompt}\n\n"
-            f"LANGUAGE RULE: You MUST respond ONLY in {lang_name}.\n"
-            f"FAQ Context:\n{faq_context}\n\n"
-            f"{doc_context}"
-        )
-    else:
-        base_system = (
-            f"You are a strict customer support chatbot for {company} ({industry}). "
-            f"Business Description: {desc}\n\n"
-            "### ABSOLUTE RULES:\n"
-            f"1. LANGUAGE: You MUST respond ONLY in {lang_name}. Translate your entire response into {lang_name}.\n"
-            f"2. SCOPE: ONLY answer questions about {company} or the {industry} industry.\n"
-            "3. NO HALLUCINATIONS: If the FAQ Context or Knowledge Base Documents below do not have the EXACT answer, "
-            "you MUST NOT use your general LLM knowledge. You MUST NOT guess details like discounts, packs, or prices.\n"
-            f"4. FALLBACK: For ANY question you cannot answer using the provided Contexts, you MUST respond with this exact phrase (translated into {lang_name}): "
-            "'I do apologize, but I do not have specific details on that right now. Please provide your Name, Phone Number, and Email address, "
-            "and our support team will contact you shortly to provide the information you need.'\n"
-            "5. FORMAT: Use short, professional bullet points for answers.\n"
-            "6. CITATIONS: When using information from the 'VERIFIED KNOWLEDGE BASE CONTEXT', "
-            "cite the document filename in brackets (e.g. '[Source: Return_Policy.pdf]'). Do not fabricate citations.\n"
-            f"\n\nFAQ Context:\n{faq_context}\n\n"
-            f"{doc_context}"
-        )
+    # Build system instructions via shared grounded prompt builder
+    base_system = build_rag_system_prompt(
+        company=company,
+        industry=industry,
+        desc=desc,
+        custom_prompt=custom_prompt,
+        lang_name=lang_name,
+        faq_context=faq_context,
+        doc_context=doc_context,
+    )
 
     answer_fn = _get_chat_hook("aget_answer", None)
     generated_answer = None
@@ -503,6 +492,20 @@ global_persistent_checkpointer = get_checkpointer()
 compiled_chat_graph = build_chat_graph(checkpointer=global_persistent_checkpointer)
 
 
+_PER_TURN_RESET_DEFAULTS: ConversationState = {
+    "intent": "",
+    "lead_data": None,
+    "is_pure_lead": False,
+    "faq_context": "",
+    "retrieved_chunks": [],
+    "doc_context": "",
+    "sources": [],
+    "answer": "",
+    "is_resolved": False,
+    "error": None,
+}
+
+
 async def run_chat_graph(
     initial_state: ConversationState,
     thread_id: Optional[str] = None,
@@ -515,8 +518,11 @@ async def run_chat_graph(
         tid = f"{initial_state.get('tenant_id', 'anon')}:{initial_state.get('session_id', 'anon')}"
         config["configurable"] = {"thread_id": tid}
 
+    # Reset per-turn transient channels so previous checkpoint turns never bleed intent/sources/leads
+    turn_state: ConversationState = {**_PER_TURN_RESET_DEFAULTS, **initial_state}
+
     try:
-        result = await compiled_chat_graph.ainvoke(initial_state, config=config)
+        result = await compiled_chat_graph.ainvoke(turn_state, config=config)
         return result
     except Exception as e:
         logger.error(f"[run_chat_graph] Error executing compiled graph: {e}")

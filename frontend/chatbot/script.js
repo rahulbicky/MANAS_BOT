@@ -29,6 +29,27 @@
 
         let customGreeting = 'Connected to secure chat. How can we help?';
 
+        function isSafeImageSrc(url) {
+            if (!url || typeof url !== 'string') return false;
+            const trimmed = url.trim();
+            return /^https?:\/\//i.test(trimmed) || /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i.test(trimmed);
+        }
+
+        function sanitizeRenderedHTML(rawHtml) {
+            const temp = document.createElement('div');
+            temp.innerHTML = rawHtml;
+            temp.querySelectorAll('script, iframe, object, embed, style, link').forEach(el => el.remove());
+            temp.querySelectorAll('*').forEach(el => {
+                for (const attr of Array.from(el.attributes)) {
+                    const name = attr.name.toLowerCase();
+                    const val = (attr.value || '').trim().toLowerCase();
+                    if (name.startsWith('on')) el.removeAttribute(attr.name);
+                    if ((name === 'href' || name === 'src') && val.startsWith('javascript:')) el.removeAttribute(attr.name);
+                }
+            });
+            return temp.innerHTML;
+        }
+
         // Fetch company profile to update chat title AND the Demo Page
         fetch(`${API_BASE}/chat/config?tenant_id=${tenantId}`)
             .then(res => res.json())
@@ -40,11 +61,16 @@
                     customGreeting = data.chatbot_greeting_message;
                 }
 
-                if (data && data.logo_url) {
-                    botLogoB64 = data.logo_url;
+                if (data && data.logo_url && isSafeImageSrc(data.logo_url)) {
+                    botLogoB64 = data.logo_url.trim();
                     const headerAvatar = document.getElementById('cb-header-avatar');
                     if (headerAvatar) {
-                        headerAvatar.innerHTML = `<img src="${botLogoB64}" alt="Bot Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                        headerAvatar.innerHTML = '';
+                        const img = document.createElement('img');
+                        img.src = botLogoB64;
+                        img.alt = 'Bot Logo';
+                        img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; border-radius: 50%;';
+                        headerAvatar.appendChild(img);
                     }
                 }
 
@@ -248,7 +274,7 @@
 
             if (sender === 'bot') {
                 if (typeof marked !== 'undefined') {
-                    div.innerHTML = marked.parse(text);
+                    div.innerHTML = sanitizeRenderedHTML(marked.parse(text));
                 } else {
                     div.textContent = text;
                 }

@@ -47,6 +47,24 @@ def decode_employee_token(token: str) -> Optional[dict]:
         return None
 
 
+def _is_token_revoked_by_role_change(employee: dict, payload: dict) -> bool:
+    """Check if employee's role changed after the JWT was issued."""
+    role_changed_at = employee.get("role_changed_at")
+    if not role_changed_at:
+        return False
+    iat = payload.get("iat")
+    if iat is None:
+        return False
+    if isinstance(iat, (int, float)):
+        iat_dt = datetime.datetime.fromtimestamp(iat, tz=datetime.timezone.utc)
+    else:
+        iat_dt = ensure_utc(iat)
+    if isinstance(role_changed_at, str):
+        role_changed_at = datetime.datetime.fromisoformat(role_changed_at)
+    role_changed_dt = ensure_utc(role_changed_at)
+    return role_changed_dt > iat_dt
+
+
 # ── Employee auth dependencies ───────────────────────────────────────────────
 
 async def get_employee_from_token(request: Request) -> dict:
@@ -62,21 +80,9 @@ async def get_employee_from_token(request: Request) -> dict:
     if not employee or not employee.get("is_active"):
         raise HTTPException(status_code=401, detail="Employee account not found or deactivated.")
 
-    # Option A: invalidate token if role was changed after it was issued
-    role_changed_at = employee.get("role_changed_at")
-    if role_changed_at:
-        iat = payload.get("iat")
-        if iat is not None:
-            # PyJWT ≥2: iat is decoded as an int (Unix timestamp)
-            if isinstance(iat, (int, float)):
-                iat_dt = datetime.datetime.fromtimestamp(iat, tz=datetime.timezone.utc)
-            else:
-                iat_dt = ensure_utc(iat)
-            if isinstance(role_changed_at, str):
-                role_changed_at = datetime.datetime.fromisoformat(role_changed_at)
-            role_changed_dt = ensure_utc(role_changed_at)
-            if role_changed_dt > iat_dt:
-                raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
+    # Invalidate token if role was changed after it was issued
+    if _is_token_revoked_by_role_change(employee, payload):
+        raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
 
     return employee
 
@@ -149,7 +155,11 @@ def get_tenant_db(
             payload = decode_employee_token(token)
             if payload:
                 employee = get_employee_by_id(payload.get("sub"))
-                if employee and employee.get("is_active"):
+                if (
+                    employee
+                    and employee.get("is_active")
+                    and not _is_token_revoked_by_role_change(employee, payload)
+                ):
                     is_authorized = True
 
     if not is_authorized:

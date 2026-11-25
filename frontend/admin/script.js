@@ -1305,7 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([cat, n]) => {
             const pct = Math.round(n / total * 100);
             catEl.innerHTML += `<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;">
-                <span style="width:110px;color:var(--text-main);text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cat}</span>
+                <span style="width:110px;color:var(--text-main);text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(cat)}</span>
                 <div style="flex:1;background:#f0f0f0;border-radius:4px;height:8px;overflow:hidden;">
                     <div style="width:${pct}%;background:var(--primary);height:100%;border-radius:4px;transition:width 0.4s;"></div>
                 </div>
@@ -1359,9 +1359,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong>${escapeHTML(inc.tenant_name || inc.tenant_id)}</strong></td>
                     <td>${escapeHTML(inc.title)}${_slaBadge(inc)}</td>
                     <td><small>${escapeHTML((inc.category||'').replace(/_/g,' '))}</small></td>
-                    <td><span style="color:${sevColor};font-weight:700;">${(inc.severity||'').toUpperCase()}</span></td>
-                    <td><span style="color:${staColor};font-weight:600;">${(inc.status||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span></td>
-                    <td><button class="btn outline-btn" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openIncidentPanel('${inc.id}')">Respond</button></td>
+                    <td><span style="color:${sevColor};font-weight:700;">${escapeHTML((inc.severity||'').toUpperCase())}</span></td>
+                    <td><span style="color:${staColor};font-weight:600;">${escapeHTML((inc.status||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</span></td>
+                    <td><button class="btn outline-btn" style="padding:0.2rem 0.6rem;font-size:0.75rem;" onclick="openIncidentPanel('${escapeHTML(inc.id)}')">Respond</button></td>
                 `;
                 adminIncList.appendChild(tr);
             });

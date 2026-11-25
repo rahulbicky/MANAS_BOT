@@ -1,3 +1,4 @@
+import html
 import smtplib
 import os
 from email.mime.text import MIMEText
@@ -26,6 +27,10 @@ def send_lead_notification(client_email: str, client_name: str, lead_info: str, 
 
     try:
         msg = MIMEMultipart("alternative")
+        safe_client_name = html.escape(str(client_name or "Client"))
+        safe_lead_info = html.escape(str(lead_info or "")).replace("\n", "<br>")
+        safe_inquiry = html.escape(str(inquiry or ""))
+
         msg["Subject"] = f"🎯 New Sales Lead — {client_name}"
         msg["From"] = SMTP_EMAIL
         msg["To"] = client_email
@@ -39,12 +44,12 @@ def send_lead_notification(client_email: str, client_name: str, lead_info: str, 
 
                 <div style="background: #0f3460; padding: 15px; border-radius: 8px; margin: 15px 0;">
                     <p><strong style="color: #4fc3f7;">Contact Details:</strong></p>
-                    <p style="font-size: 16px;">{lead_info}</p>
+                    <p style="font-size: 16px;">{safe_lead_info}</p>
                 </div>
 
                 <div style="background: #0f3460; padding: 15px; border-radius: 8px; margin: 15px 0;">
                     <p><strong style="color: #4fc3f7;">Original Inquiry:</strong></p>
-                    <p>{inquiry}</p>
+                    <p>{safe_inquiry}</p>
                 </div>
                 
                 <div style="background: #0f3460; padding: 15px; border-radius: 8px; margin: 15px 0;">

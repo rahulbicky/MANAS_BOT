@@ -656,13 +656,17 @@ document.addEventListener('DOMContentLoaded', () => {
         chats.forEach(c => {
             const tr = document.createElement('tr');
             const answerPreview = c.answer ? (c.answer.length > 100 ? c.answer.substring(0, 100) + '...' : c.answer) : '';
+            const safePageUrl = safeHttpUrl(c.page_url);
+            const linkHtml = safePageUrl
+                ? `<a href="${escapeHTML(safePageUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0066cc;text-decoration:none;">Link</a>`
+                : `<span style="color:var(--text-muted)">—</span>`;
             tr.innerHTML = `
                 <td style="white-space:nowrap"><small>${new Date(c.created_at).toLocaleString()}</small></td>
                 <td><small style="color:var(--text-muted)">${escapeHTML(c.session_id.substring(0, 8))}...</small></td>
                 <td>${escapeHTML(c.question)}</td>
                 <td><small>${escapeHTML(answerPreview)}</small></td>
                 <td><code style="background:#f5f5f5;padding:2px 4px;">${escapeHTML(c.intent)}</code></td>
-                <td><a href="${escapeHTML(c.page_url)}" target="_blank" style="color:#0066cc;text-decoration:none;">Link</a></td>
+                <td>${linkHtml}</td>
             `;
             chatsList.appendChild(tr);
         });
@@ -1073,8 +1077,11 @@ document.addEventListener('DOMContentLoaded', () => {
         docs.forEach(d => {
             const tr = document.createElement('tr');
             const isUrl = d.file_type === 'url';
+            const safeDocUrl = isUrl ? safeHttpUrl(d.filename) : '';
             const sourceDisplay = isUrl
-                ? `<a href="${escapeHTML(d.filename)}" target="_blank" style="color:#0066cc;word-break:break-all;font-size:0.85rem;">${escapeHTML(d.filename.replace(/^https?:\/\//, '').substring(0, 60))}${d.filename.length > 60 ? '…' : ''}</a>`
+                ? (safeDocUrl
+                    ? `<a href="${escapeHTML(safeDocUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0066cc;word-break:break-all;font-size:0.85rem;">${escapeHTML(d.filename.replace(/^https?:\/\//, '').substring(0, 60))}${d.filename.length > 60 ? '…' : ''}</a>`
+                    : `<span style="word-break:break-all;font-size:0.85rem;">${escapeHTML(d.filename)}</span>`)
                 : `<strong>${escapeHTML(d.filename)}</strong>`;
             const typeLabel = isUrl
                 ? `<span style="background:#eef2ff;color:#4338ca;padding:2px 7px;border-radius:20px;font-size:0.78rem;font-weight:600;">🔗 URL</span>`
@@ -1194,8 +1201,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="white-space:nowrap"><small>${new Date(inc.created_at).toLocaleString()}</small></td>
                     <td><strong>${escapeHTML(inc.title)}</strong></td>
                     <td><small>${escapeHTML(inc.category.replace(/_/g,' '))}</small></td>
-                    <td><span style="color:${sevColor};font-weight:700;">${inc.severity.toUpperCase()}</span></td>
-                    <td><span style="color:${stColor};font-weight:600;">${inc.status.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>${reopenBtn}</td>
+                    <td><span style="color:${sevColor};font-weight:700;">${escapeHTML((inc.severity||'').toUpperCase())}</span></td>
+                    <td><span style="color:${stColor};font-weight:600;">${escapeHTML((inc.status||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</span>${reopenBtn}</td>
                     <td style="white-space:normal;max-width:280px;word-break:break-word;line-height:1.5;"><small>${responseCell}</small></td>
                 `;
                 incidentsList.appendChild(tr);
@@ -1297,6 +1304,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (type !== '') {
             setTimeout(() => { el.textContent = ''; el.className = 'msg-text'; }, 5000);
         }
+    }
+
+    function safeHttpUrl(rawUrl) {
+        if (!rawUrl || typeof rawUrl !== 'string') return '';
+        const trimmed = rawUrl.trim();
+        return /^https?:\/\//i.test(trimmed) ? trimmed : '';
     }
 
     function escapeHTML(str) {

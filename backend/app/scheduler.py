@@ -25,16 +25,15 @@ _scheduler: BackgroundScheduler | None = None
 
 def _refresh_all_tenants_urls():
     """
-    For every active tenant, re-scrape URL-type knowledge documents.
-    This keeps the AI's web-sourced knowledge current without manual uploads.
+    For every active tenant, re-scrape URL-type knowledge documents and re-index
+    their vector embeddings so the AI always retrieves current web content.
     """
     try:
         from ..database import get_all_tenants, get_tenant_session, KnowledgeDocument
-        from .utils.security_validation import is_safe_public_url
-        import httpx
-        from bs4 import BeautifulSoup
+        from .utils.security_validation import is_safe_public_url, safe_http_get_sync, clean_html_text
+        from ..rag import reingest_document
 
-        tenants = get_all_tenants()
+        tenants = get_all_tenants(use_cache=False)
         total_refreshed = 0
         total_failed = 0
 
@@ -59,22 +58,21 @@ def _refresh_all_tenants_urls():
                                 total_failed += 1
                                 continue
 
-                            with httpx.Client(timeout=15, follow_redirects=True) as client:
-                                response = client.get(
-                                    doc.filename,
-                                    headers={"User-Agent": "Mozilla/5.0 AI-Training-Bot/1.0"},
-                                )
-                                response.raise_for_status()
-
-                            soup = BeautifulSoup(response.text, "html.parser")
-                            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
-                                tag.decompose()
-                            text = soup.get_text(separator="\n", strip=True)
-                            lines = [line.strip() for line in text.splitlines() if line.strip()]
-                            new_content = "\n".join(lines)
+                            response = safe_http_get_sync(doc.filename, timeout=15.0)
+                            new_content = clean_html_text(response.text)
 
                             if new_content.strip():
                                 doc.content = new_content
+                                doc.file_size_bytes = len(new_content.encode("utf-8"))
+                                session.commit()
+                                reingest_document(
+                                    document_id=doc.id,
+                                    tenant_id=tenant_id,
+                                    filename=doc.filename,
+                                    file_type="url",
+                                    new_content=new_content,
+                                    db=session,
+                                )
                                 total_refreshed += 1
                         except Exception as e:
                             logger.warning(f"[Scheduler] URL refresh failed for {doc.filename}: {e}")

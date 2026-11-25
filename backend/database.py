@@ -747,10 +747,25 @@ def create_demo_tenant(name: str, db_url: str = "") -> dict:
     finally:
         session.close()
 
+def _limits_from_plan(plan: Optional[Plan]) -> dict:
+    """Convert a Plan ORM model into the API limits dict without opening extra DB sessions."""
+    if not plan:
+        return dict(PLAN_LIMITS["Starter"])
+    langs = plan.languages or "en"
+    return {
+        "messages_per_month": plan.messages_per_month,
+        "docs": plan.docs_limit,
+        "faqs": plan.faqs_limit,
+        "export": plan.export_enabled,
+        "languages": langs.split(",") if langs != "all" else "all",
+    }
+
+
 def _tenant_to_dict(tenant: CentralTenant, plan_name: str = None, include_hash: bool = False) -> dict:
     if not tenant: return None
+    plan_obj = tenant.plan if plan_name is None else getattr(tenant, "plan", None)
     if plan_name is None:
-        plan_name = tenant.plan.name if tenant.plan else "Starter"
+        plan_name = plan_obj.name if plan_obj else "Starter"
     d = {
         "id": tenant.id,
         "name": tenant.name,
@@ -764,7 +779,9 @@ def _tenant_to_dict(tenant: CentralTenant, plan_name: str = None, include_hash: 
         "subscription_end_date": str(tenant.subscription_end_date),
         "deactivated_at": str(tenant.deactivated_at) if getattr(tenant, "deactivated_at", None) else None,
         "notification_email": tenant.notification_email,
-        "current_plan": plan_name
+        "current_plan": plan_name,
+        "limits": _limits_from_plan(plan_obj),
+        "conversation_retention_days": getattr(tenant, "conversation_retention_days", 0) or 0,
     }
     if include_hash:
         d["admin_password_hash"] = tenant.admin_password_hash
